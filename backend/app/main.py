@@ -30,6 +30,7 @@ def create_app() -> FastAPI:
             r"127\.0\.0\.1|"
             r"169\.58\.70\.37|"
             r"diddifree\.com|"
+            r"vercel\.app|"
             r"www\.diddifree\.com|"
             r"192\.168\.\d{1,3}\.\d{1,3}|"
             r"10\.\d{1,3}\.\d{1,3}\.\d{1,3}|"

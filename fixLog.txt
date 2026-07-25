@@ -222,3 +222,8 @@ Pourquoi: Un compte cree en local n'existe pas automatiquement sur le VPS. Cette
 Changement: Amelioration des erreurs de validation FastAPI.
 Effet: Les requetes invalides retournent maintenant un message clair et un champ details avec le champ concerne, la raison et le type d'erreur. Un JSON mal forme indique explicitement "Invalid JSON body" au lieu du message placeholder.
 Pourquoi: Les erreurs curl sous Windows peuvent venir de guillemets mal echappes. Le backend doit aider a comprendre si le probleme vient du JSON, d'un champ manquant ou des identifiants.
+
+2026-07-25 14:36:21
+Changement: Ajout de FRONTEND_BRIEFING.md et lien depuis le README.
+Effet: Le developpeur frontend dispose maintenant d'un document complet sur les endpoints disponibles, les payloads, les reponses, les regles d'authentification, les use cases Phase 1/Phase 2 et les ecrans attendus.
+Pourquoi: Le backend est assez avance pour servir de contrat API au frontend. Documenter les use cases maintenant evite que l'interface parte dans une direction differente du plan backend.
