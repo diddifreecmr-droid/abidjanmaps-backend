@@ -1,0 +1,14 @@
+# Secrets
+.env
+*.env.local
+
+# Large OSRM map data binaries (re-generated via scripts/docker)
+data/osrm/*.osrm*
+data/osrm/*.pbf
+
+# Python Bytecode & Cache
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/

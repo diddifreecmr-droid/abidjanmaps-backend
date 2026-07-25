@@ -1,0 +1,204 @@
+2026-07-23 20:36:37
+Changement: Creation de guide.txt pour expliquer le projet fichier par fichier.
+Effet: Le code devient plus facile a comprendre pour un nouveau dev.
+Pourquoi: Cela aide a suivre l'architecture sans se perdre dans les dossiers.
+
+2026-07-23 21:12:52
+Changement: Ajout de tests pour les endpoints roads, places et route_reports, puis installation de geoalchemy2 dans le venv.
+Effet: Les nouveaux endpoints CRUD sont verifies automatiquement et la partie PostGIS peut s'importer correctement dans l'environnement de test.
+Pourquoi: Cela valide que la base technique des donnees geographiques est stable avant d'aller plus loin.
+
+2026-07-23 21:30:46
+Changement: CORS dev ouvert pour localhost et reseaux WLAN, plus recherche de places par nom ou alias.
+Effet: Le frontend local ou sur le WLAN peut appeler l'API, et les lieux peuvent etre retrouves plus facilement.
+Pourquoi: Cela prepare la phase 2 avec plus de confort pour le developpement et la recherche de lieux locaux.
+
+2026-07-23 21:32:54
+Changement: Ajout d'un docker-compose.override.yaml pour le mode developpement avec --reload.
+Effet: En dev, le backend recharge automatiquement le code quand un fichier change.
+Pourquoi: On garde un Docker propre pour la stack, tout en ayant le confort du hot reload pendant le dev.
+
+2026-07-23 21:32:54
+Changement: Correction du healthcheck OSRM dans docker-compose.yaml.
+Effet: Docker verifie maintenant une vraie route OSRM au lieu d'un endpoint /health qui peut ne pas exister.
+Pourquoi: Cela evite que Compose marque OSRM comme unhealthy alors que le service repond correctement aux requetes de route.
+
+2026-07-23 21:55:13
+Changement: Retrait du healthcheck OSRM du docker-compose.yaml.
+Effet: Compose attend seulement que le conteneur OSRM soit demarre, sans supposer l'existence d'un endpoint de sante.
+Pourquoi: On evite de tester une route fictive et on preferera ajouter un vrai healthcheck plus tard si l'API OSRM le permet clairement.
+
+2026-07-23 22:52:55
+Changement: Enrichissement des modeles roads et places avec les champs terrain de phase 2.
+Effet: Le backend peut maintenant stocker des infos comme surface reelle, praticabilite saisonniere, point de controle, largeur utile, vernacular name et statut de validation.
+Pourquoi: Cela prepare la carte locale d'Abidjan avec des donnees plus utiles que les simples routes OpenStreetMap de base.
+
+2026-07-23 23:09:12
+Changement: Ajout de la validation proposed/validated/rejected et de l'historique pour roads et places.
+Effet: Le backend peut maintenant valider ou rejeter une donnee et conserver une trace des changements.
+Pourquoi: Cela permet de controler les donnees locales avant de les faire influencer le moteur de route.
+
+2026-07-24 00:45:09
+Changement: Preparation du backend pour retourner plusieurs propositions de routes OSRM.
+Effet: Le backend expose maintenant un nouvel endpoint dedie aux alternatives de route et sait lire plusieurs routes dans la reponse OSRM.
+Pourquoi: Cela permet de presenter plusieurs trajets possibles au frontend sans casser l'endpoint principal existant.
+
+2026-07-24 00:56:00
+Changement: Ajout d'un score backend et d'un classement pour les propositions de routes.
+Effet: Chaque route alternative peut maintenant etre triee selon un score calcule avant affichage.
+Pourquoi: Cela prepare l'utilisation future des enrichissements locaux pour penaliser ou favoriser certaines routes.
+
+2026-07-24 01:10:58
+Changement: Branchement des enrichissements roads et route_reports sur le score des alternatives de route.
+Effet: Le backend recupere maintenant les troncons touches par chaque route, lit leurs attributs locaux et applique ces infos au score final.
+Pourquoi: Cela permet de penaliser ou favoriser une route selon l'etat reel du terrain, sans refaire tout le calcul au moment de la requete.
+
+2026-07-24 01:16:01
+Changement: Ajout d'un score_breakdown plus lisible, d'un endpoint detaille pour les routes proposees et de traces d'historique quand un route_report touche une route.
+Effet: Les reponses de routing montrent maintenant clairement les facteurs de score, les troncons touches et les reports relies, et l'historique garde une trace du recalcul metier.
+Pourquoi: Cela aide a debugger, a expliquer pourquoi une route est classee avant une autre, et a garder un suivi propre des enrichissements locaux.
+
+2026-07-24 01:18:24
+Changement: Standardisation des valeurs metier pour surface_state et report_type avec normalisation des alias simples.
+Effet: Le backend accepte des termes humains comme "ok" ou "peage", mais stocke une version canonique comme "good" ou "toll".
+Pourquoi: Cela evite les incoherences de vocabulaire dans la base et rend le scoring plus fiable sur la duree.
+
+2026-07-24 10:56:50
+Changement: Standardisation aussi de seasonal_practicability, point_controle et type_flux, avec un endpoint taxonomy pour lister les valeurs autorisees.
+Effet: Les donnees de route sont maintenant plus homogenes, et l'API peut montrer clairement quelles valeurs sont acceptees ou normalisees.
+Pourquoi: Cela simplifie la saisie, evite les variantes inutiles dans la base et rend les regles metier plus faciles a maintenir.
+
+2026-07-24 11:06:40
+Changement: Ajout de l'initialisation automatique du schema SQL au demarrage du backend.
+Effet: Si la base Docker est vide, les tables sont creees automatiquement avant les premieres requetes.
+Pourquoi: Cela evite l'erreur "relation roads does not exist" quand on redemarre la stack sur une base neuve.
+
+2026-07-24 12:15:00
+Changement: Remplacement de create_all au demarrage par Alembic et ajout du service Docker init-db.
+Effet: Les tables sont maintenant creees et mises a jour par des migrations versionnees avant le demarrage du backend. Le service init-db applique la migration puis se termine normalement.
+Pourquoi: Cela rend les evolutions de schema previsibles, partageables entre developpeurs et plus sure pour les futures donnees metier. Une base deja creee avec create_all doit etre adoptee une seule fois avec alembic stamp head, sans supprimer ses donnees.
+
+2026-07-24 12:25:00
+Changement: Correction du chemin d'import utilise par Alembic dans Docker.
+Effet: Le conteneur de migration peut maintenant charger les modeles du package app avant d'executer une migration.
+Pourquoi: Alembic est lance par sa propre commande et ne recevait pas automatiquement le dossier du backend dans son chemin Python.
+
+2026-07-24 12:32:00
+Changement: Remplacement du healthcheck Docker du backend base sur wget par une requete Python standard.
+Effet: Docker peut maintenant verifier correctement /api/v1/health dans l'image python:slim.
+Pourquoi: wget n'est pas installe dans cette image, alors que Python et urllib font deja partie de l'environnement du backend.
+
+2026-07-24 12:36:00
+Changement: Installation d'Alembic dans l'environnement virtuel abidjanmaps-backend et adoption de la base existante au niveau 20260724_0001.
+Effet: Les commandes Alembic fonctionnent maintenant en local et dans Docker, et la base actuelle est reconnue sans recreation des tables ni perte de donnees.
+Pourquoi: Le projet peut desormais faire evoluer son schema avec des migrations versionnees a partir de la version initiale.
+
+2026-07-24 12:50:00
+Changement: Debut de la migration vers un monolithe modulaire vertical. Le module routing possede maintenant ses couches domain, application, infrastructure et presentation. Le coeur domain/application/infrastructure de map_data a aussi ete extrait.
+Effet: Le code de calcul de route est regroupe par metier et les anciens chemins restent comme adaptateurs de compatibilite pendant la transition.
+Pourquoi: Cette structure rend les domaines plus faciles a comprendre et prepare une separation future en services sans transformer prematurement le projet en microservices.
+
+2026-07-24 13:10:00
+Changement: Finalisation de la migration des trois modules metier routing, map_data et local_enrichment. Deplacement aussi de la configuration, base de donnees, logging et health checks communs vers shared.
+Effet: Les tests utilisent maintenant les modules canoniques pour routing, map_data et local_enrichment. Les anciennes couches servent uniquement de compatibilite temporaire.
+Pourquoi: Le nouveau code peut evoluer par domaine metier sans melanger les responsabilites, tout en gardant une transition sure et testee.
+
+2026-07-24 14:18:00
+Changement: Separation physique des modeles ORM et mappers PostGIS entre map_data et local_enrichment, avec une Base SQLAlchemy commune dans shared.
+Effet: Chaque module possede maintenant ses tables et conversions GeoJSON/PostGIS. Alembic charge les deux modules dans une metadata unique et ignore les tables internes des extensions PostGIS/Tiger.
+Pourquoi: Cela supprime la dependance metier au fichier global models.py, prepare une future extraction en services et empeche Alembic de proposer la suppression de tables systeme.
+
+2026-07-24 14:18:00
+Changement: Ajout de tests d'architecture pour verifier la propriete des modeles ORM et l'unicite de la metadata SQLAlchemy.
+Effet: La suite compte maintenant 17 tests et detectera une double declaration de table ou un modele replace dans le mauvais module.
+Pourquoi: La nouvelle architecture doit etre protegee automatiquement, pas seulement documentee.
+
+2026-07-24 14:32:00
+Changement: Separation des taxonomies entre map_data et local_enrichment, avec un endpoint /route-reports/taxonomy dedie.
+Effet: Les routes et les signalements possedent maintenant chacun leur vocabulaire metier. /roads/taxonomy ne melange plus les deux domaines.
+Pourquoi: Une frontiere de module doit inclure ses valeurs autorisees et ses regles de normalisation.
+
+2026-07-24 14:32:00
+Changement: Suppression complete des anciens dossiers horizontaux application, domain, infrastructure et presentation. Ajout d'un bootstrap explicite pour assembler les routers.
+Effet: La seule arborescence de source est maintenant bootstrap, modules et shared. Les URLs HTTP existantes restent identiques.
+Pourquoi: Les adaptateurs temporaires avaient rempli leur role; les conserver aurait entretenu deux architectures et rendu le projet confus.
+
+2026-07-24 14:32:00
+Changement: Renforcement des tests d'architecture et reecriture de guide.txt pour la nouvelle structure.
+Effet: La suite compte 20 tests et echoue si un ancien dossier ou import horizontal reapparait.
+Pourquoi: La restructuration doit rester durable quand plusieurs developpeurs ajouteront du code.
+
+2026-07-24 16:41:58
+Changement: Ajout du workflow complet proposed/validated/rejected pour les route_reports, avec endpoints de validation, rejet, filtrage par statut et historique dedie.
+Effet: Un signalement nouvellement cree reste une proposition. Un administrateur peut ensuite le valider ou le rejeter en indiquant son identifiant et une note.
+Pourquoi: Une information terrain non verifiee ne doit jamais modifier les itineraires proposes aux utilisateurs.
+
+2026-07-24 16:41:58
+Changement: Le scoring PostGIS ne charge maintenant que les routes et signalements validated. Correction aussi des controles de type none, de la securite inconnue et des signalements severes qui etaient trop facilement consideres comme bloquants.
+Effet: Les propositions et rejets restent consultables pour l'audit mais sont ignores par le calcul. Un peage severe, par exemple, n'est plus confondu avec une route bloquee.
+Pourquoi: Le classement doit reposer uniquement sur des informations publiees et sur une interpretation metier correcte.
+
+2026-07-24 16:41:58
+Changement: Les creations publiques de roads et places ne peuvent plus choisir elles-memes leur statut de validation. Ajout de la migration Alembic 20260724_0002.
+Effet: Toute nouvelle donnee commence en proposed, et la base conserve le reviewer, la date de revue et l'historique des route_reports.
+Pourquoi: Cela ferme un contournement du processus de validation et garde une trace comprehensible de chaque decision.
+
+2026-07-24 17:03:50
+Changement: Ajout des endpoints PATCH pour roads, places et route_reports, avec cas d'usage dedies et historique old_value/new_value.
+Effet: Une information peut etre corrigee champ par champ sans renvoyer tout l'objet. Toute modification remet automatiquement son statut a proposed et efface la precedente validation du signalement.
+Pourquoi: Une validation porte sur une version precise des donnees; apres une correction, la nouvelle version doit etre revue avant d'influencer le routage.
+
+2026-07-24 17:03:50
+Changement: L'indicateur verified des places est maintenant gere par le workflow de validation, et non par le client.
+Effet: Il devient true lors de /validate, puis repasse false apres une modification ou un rejet.
+Pourquoi: Cela evite qu'un utilisateur declare lui-meme un lieu verifie ou conserve une verification devenue obsolete.
+
+2026-07-24 17:03:50
+Changement: Ajout d'un test d'integration reel pour les workflows PATCH avec SQLAlchemy et PostGIS.
+Effet: Le test couvre les vraies tables, geometries, transactions et historiques, puis effectue un rollback externe pour ne laisser aucune donnee de test.
+Pourquoi: Les tests API rapides utilisent des repositories simules; ce second niveau detecte les erreurs qui ne peuvent apparaitre qu'avec PostgreSQL/PostGIS.
+
+2026-07-24 17:58:29
+Changement: Ajout des profils vehicule car, motorcycle et truck, avec les alias voiture, moto et camion, et migration Alembic 20260724_0003.
+Effet: Chaque road stocke maintenant allowed_vehicle_profiles. Les anciennes routes autorisent les trois profils par defaut afin de conserver leur comportement.
+Pourquoi: Le backend doit connaitre les vehicules acceptes sur un troncon avant de pouvoir recommander un itineraire adapte.
+
+2026-07-24 17:58:29
+Changement: Branchement de vehicle_width_m, vehicle_weight_t, width_usable_m et tonnage_max_reel_t dans le scoring des alternatives.
+Effet: Une route interdite au profil, trop etroite ou limitee a un tonnage inferieur recoit un fort malus. score_breakdown indique forbidden, overweight, too_wide et eligible.
+Pourquoi: Une route geometriquement calculable par OSRM n'est pas forcement praticable par le vehicule reel de l'utilisateur.
+
+2026-07-24 17:58:29
+Changement: Correction du rattachement entre une alternative triee et son detail d'enrichissement.
+Effet: Apres classement, chaque route conserve maintenant ses propres troncons, signalements et contraintes vehicule.
+Pourquoi: Un tri change l'ordre des routes; utiliser leur ancienne position pouvait afficher le malus d'une route sur une autre.
+
+2026-07-24 18:32:07
+Changement: Remplacement de l'intersection geographique exacte par ST_DWithin avec une tolerance configurable de 15 metres.
+Effet: Une donnee locale peut enrichir une trace OSRM meme si les deux geometries ont un petit decalage. Les index GIST existants sont conserves; aucune migration d'index inutile n'a ete ajoutee.
+Pourquoi: Deux sources cartographiques de la meme route ne produisent presque jamais des coordonnees parfaitement identiques.
+
+2026-07-24 18:32:07
+Changement: Ajout de quatre troncons de demonstration Phase 2 et d'un script de seed idempotent.
+Effet: Le premier lancement cree et valide quatre roads. Les lancements suivants les reconnaissent avec seed_key et seed_version et ne creent aucun doublon.
+Pourquoi: Le scoring avait besoin de donnees locales validees et controlees pour demontrer concretement ses decisions.
+
+2026-07-24 18:32:07
+Changement: Ajout d'un script de verification des scenarios car, motorcycle et truck contre le vrai OSRM et PostGIS.
+Effet: La voiture et le camion preferent la branche large et evitent une alternative incompatible; la moto peut utiliser la branche courte.
+Pourquoi: Ce test de bout en bout prouve que le calcul OSRM, le rapprochement spatial et le scoring metier travaillent ensemble.
+
+2026-07-24 20:53:30
+Changement: Ajout du module metier vertical users avec la table users et la migration Alembic 20260724_0004.
+Effet: Les comptes possedent un email unique, un mot de passe hache, un role user/admin et un etat actif. Le premier administrateur se cree avec scripts.create_user.
+Pourquoi: L'authentification devient un vrai domaine metier, isole et extractible plus tard, plutot qu'un ensemble de fonctions dispersees.
+
+2026-07-24 20:53:30
+Changement: Ajout de l'authentification JWT et du hachage Argon2, puis protection des endpoints d'ecriture.
+Effet: Les lectures et le routage restent publics; les creations et modifications exigent un compte actif; validate, reject et la gestion des comptes exigent admin.
+Pourquoi: Les donnees de cartographie influencent le scoring et ne doivent pas pouvoir etre publiees ou alterees anonymement.
+
+2026-07-24 20:53:30
+Changement: L'auteur des signalements, modifications et validations vient maintenant du jeton authentifie.
+Effet: reported_by, changed_by et reviewed_by ne peuvent plus etre falsifies par le JSON du client. Des tests unitaires et un test PostgreSQL avec rollback couvrent ce workflow.
+Pourquoi: Un historique n'est utile pour l'audit que si l'identite enregistree est controlee par le backend.

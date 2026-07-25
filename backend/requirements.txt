@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+httpx
+pydantic-settings
+asyncpg
+sqlalchemy
+geoalchemy2
+alembic
+PyJWT
+pwdlib[argon2]

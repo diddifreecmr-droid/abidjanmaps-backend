@@ -1,0 +1,23 @@
+# Environment files (Secrets!)
+.env
+
+# Python Bytecode & Caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Environments
+.venv/
+venv/
+ENV/
+
+# Build and Egg Info
+*.egg-info/
+dist/
+build/
+
+# IDE / Editor Folders
+.vscode/
+.idea/
+*.swp

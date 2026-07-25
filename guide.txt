@@ -1,0 +1,252 @@
+GUIDE RAPIDE DE LA NOUVELLE ARCHITECTURE
+
+1. POINTS D'ENTREE
+
+- backend/app/main.py
+  Cree FastAPI, configure CORS et les logs, puis charge le routeur principal.
+
+- backend/app/bootstrap/api.py
+  Assemble les routers des quatre modules et de shared.
+  Ce fichier relie les composants mais ne contient aucune regle metier.
+
+2. MODULE ROUTING
+
+- backend/app/modules/routing/domain/entities/
+  Coordinate, Route et Price: objets metier purs du calcul d'itineraire.
+
+- backend/app/modules/routing/domain/services/
+  Contrats metier pour la couverture et le calcul de prix.
+
+- backend/app/modules/routing/application/dto.py
+  Donnees d'entree du cas d'usage de calcul de route.
+
+- backend/app/modules/routing/application/ports/
+  Interfaces attendues pour OSRM et les enrichissements locaux.
+
+- backend/app/modules/routing/application/use_cases/calculate_route.py
+  Orchestre validation de zone, appel OSRM et calcul du prix.
+
+- backend/app/modules/routing/application/services/route_scoring.py
+  Calcule et detaille le score des propositions de route.
+  Ajoute un fort malus si le vehicule est interdit, trop lourd ou trop large.
+
+- backend/app/modules/routing/application/services/route_enrichment.py
+  Demande les informations terrain utilisees par le scoring.
+
+- backend/app/modules/routing/infrastructure/osrm/engine.py
+  Client concret du serveur OSRM.
+
+- backend/app/modules/routing/infrastructure/pricing/default_pricing_service.py
+  Implementation concrete du calcul de prix.
+
+- backend/app/modules/routing/infrastructure/coverage/bounding_box_coverage.py
+  Verification concrete de la zone geographique autorisee.
+
+- backend/app/modules/routing/infrastructure/enrichment/postgis_repository.py
+  Lit dans PostGIS les troncons et signalements croises par une proposition OSRM.
+
+- backend/app/modules/routing/presentation/
+  Endpoints /route, /routes/proposals et schemas JSON associes.
+
+3. MODULE MAP_DATA
+
+- backend/app/modules/map_data/domain/entities/
+  Entites Road et Place.
+
+- backend/app/modules/map_data/domain/taxonomy.py
+  Valeurs et normalisations propres aux routes.
+
+- backend/app/modules/map_data/application/ports/
+  Interfaces des repositories Road et Place.
+
+- backend/app/modules/map_data/application/use_cases/update_map_data.py
+  Modifie une route ou un lieu et force son retour a proposed.
+  Un lieu modifie perd aussi son indicateur verified jusqu'a une nouvelle validation.
+
+- backend/app/modules/map_data/infrastructure/persistence/models.py
+  Modeles ORM roads, places, road_history et place_history.
+
+- backend/app/modules/map_data/infrastructure/persistence/mappers.py
+  Conversion des entites Road/Place vers les modeles PostGIS.
+
+- backend/app/modules/map_data/infrastructure/persistence/*_repository.py
+  Repositories SQLAlchemy concrets.
+
+- backend/app/modules/map_data/infrastructure/seed_data/phase2_roads.json
+  Quatre troncons de demonstration alignes sur deux alternatives OSRM reelles.
+
+- backend/app/modules/map_data/presentation/
+  Endpoints et schemas de roads et places.
+
+4. MODULE LOCAL_ENRICHMENT
+
+- backend/app/modules/local_enrichment/domain/entities/route_report.py
+  Entite metier d'un signalement terrain.
+
+- backend/app/modules/local_enrichment/domain/taxonomy.py
+  Types et normalisations des signalements.
+
+- backend/app/modules/local_enrichment/application/ports/
+  Interfaces du repository des signalements et de l'ecriture dans l'historique d'une route.
+
+- backend/app/modules/local_enrichment/application/use_cases/manage_route_reports.py
+  Orchestre la proposition, la validation ou le rejet d'un signalement.
+  Une creation authentifiee est toujours forcee au statut proposed.
+
+- backend/app/modules/local_enrichment/infrastructure/persistence/models.py
+  Modeles ORM route_reports et route_report_history.
+
+- backend/app/modules/local_enrichment/infrastructure/persistence/mappers.py
+  Conversion du signalement vers PostGIS.
+
+- backend/app/modules/local_enrichment/infrastructure/persistence/route_report_repository.py
+  Repository SQLAlchemy concret.
+
+- backend/app/modules/local_enrichment/presentation/
+  Endpoints, taxonomy et schemas JSON des signalements.
+  Les endpoints /validate et /reject publient la decision administrative.
+
+5. MODULE USERS
+
+- backend/app/modules/users/domain/entities/user.py
+  Entite User, roles user/admin et normalisation des adresses email.
+
+- backend/app/modules/users/application/ports/
+  Contrats abstraits pour le repository, le hachage et les jetons.
+
+- backend/app/modules/users/application/use_cases/manage_users.py
+  Cas d'usage de creation de compte, connexion et liste des utilisateurs.
+
+- backend/app/modules/users/infrastructure/persistence/
+  Modele ORM users et repository SQLAlchemy.
+
+- backend/app/modules/users/infrastructure/security/
+  Hachage Argon2 des mots de passe et signature JWT des jetons.
+
+- backend/app/modules/users/presentation/dependencies.py
+  Lit le jeton Bearer, charge l'utilisateur et verifie le role admin.
+
+- backend/app/modules/users/presentation/api.py
+  Endpoints /auth/login, /users/me et administration de /users.
+
+- backend/scripts/create_user.py
+  Cree le premier compte ou un compte de maintenance. Le mot de passe est demande
+  de facon interactive et ne reste pas dans l'historique du terminal.
+
+6. SHARED
+
+- backend/app/shared/configuration/settings.py
+  Variables d'environnement et reglages communs.
+
+- backend/app/shared/domain/exceptions.py
+  Erreurs communes transformees ensuite en reponses HTTP.
+
+- backend/app/shared/domain/vehicle.py
+  Profils car, motorcycle et truck, alias francais et dimensions par defaut.
+
+- backend/app/shared/infrastructure/db.py
+  Moteur SQLAlchemy async et ouverture des sessions.
+
+- backend/app/shared/infrastructure/persistence/base.py
+  Base ORM commune. Les modeles concrets restent dans leurs modules.
+
+- backend/app/shared/infrastructure/logging.py
+  Configuration des logs.
+
+- backend/app/shared/presentation/
+  Health checks, gestion des erreurs et schemas GeoJSON communs.
+
+7. MIGRATIONS ET TESTS
+
+- backend/alembic/env.py
+  Charge les modeles des modules dans une metadata unique et ignore les tables systeme PostGIS.
+
+- backend/alembic/versions/
+  Historique versionne du schema PostgreSQL.
+
+- backend/tests/test_architecture.py
+  Protege les frontieres: aucun ancien dossier horizontal, une metadata unique,
+  et chaque modele ORM dans son module proprietaire.
+
+- backend/tests/
+  Tests API, routage, scoring, recherche, couverture, prix et securite.
+
+- backend/tests/test_users.py
+  Verifie Argon2, JWT, la connexion et les refus 401/403.
+
+- backend/tests/test_enrichment_publishing.py
+  Verifie que le scoring PostGIS ne selectionne que les donnees validated et utilise
+  la tolerance ST_DWithin.
+
+- backend/tests/integration/test_patch_workflow_postgis.py
+  Teste les vraies ecritures SQLAlchemy/PostGIS dans une transaction annulee a la fin.
+  Aucune donnee de test n'est conservee dans PostgreSQL.
+
+- backend/scripts/seed_phase2.py
+  Charge ou actualise les troncons de demonstration sans creer de doublons.
+
+- backend/scripts/check_phase2_scenarios.py
+  Lance les scenarios voiture, moto et camion contre le vrai backend.
+
+Commandes principales:
+
+- pytest
+- RUN_POSTGIS_INTEGRATION=1 pytest tests/integration/test_patch_workflow_postgis.py
+- docker compose exec backend python -m scripts.seed_phase2
+- docker compose exec backend python -m scripts.check_phase2_scenarios
+- docker compose exec backend python -m scripts.create_user --email admin@example.com --role admin
+- docker compose run --rm init-db alembic check
+- docker compose up -d --build
+
+AUTHENTIFICATION
+
+1. Creer le premier administrateur avec la commande create_user ci-dessus.
+2. Envoyer email et password a POST /api/v1/auth/login.
+3. Recuperer access_token dans la reponse.
+4. Envoyer ensuite l'en-tete Authorization: Bearer <access_token>.
+
+Les lectures et le routage sont publics. Les creations et modifications exigent un
+utilisateur connecte. Les validations, rejets et la gestion des comptes exigent admin.
+L'identite enregistree dans les historiques vient du jeton, jamais du JSON client.
+
+Avant un deploiement, remplacer AUTH_SECRET_KEY par une valeur longue et aleatoire.
+
+REGLE A RETENIR
+
+Pour une nouvelle fonctionnalite, commencer dans le module metier concerne.
+Utiliser shared uniquement si le composant est vraiment commun a plusieurs modules.
+Utiliser bootstrap uniquement pour assembler les modules.
+
+WORKFLOW A RETENIR
+
+Une proposition n'influence jamais le routage directement:
+
+proposed -> validation administrative -> validated -> scoring
+
+Une donnee rejected reste disponible pour l'audit, mais elle est ignoree par le scoring.
+Une donnee validated qui est modifiee repasse a proposed avant de pouvoir influencer
+le scoring avec ses nouvelles valeurs.
+
+PROFILS VEHICULE
+
+Une requete de propositions peut fournir:
+
+- profile: car, motorcycle ou truck
+- vehicle_width_m: largeur reelle optionnelle
+- vehicle_weight_t: poids reel optionnel
+
+Sans dimensions explicites, le backend utilise les valeurs par defaut du profil.
+OSRM calcule toujours les geometries avec driving; le backend classe ensuite les
+alternatives selon allowed_vehicle_profiles, width_usable_m et tonnage_max_reel_t.
+
+DONNEES DE DEMONSTRATION
+
+Le seed Phase 2 contient volontairement:
+
+- une branche courte utilisable par les motos;
+- une restriction qui penalise les voitures et camions;
+- une branche large adaptee aux poids lourds;
+- un peage sur la branche large.
+
+ENRICHMENT_MATCH_TOLERANCE_M vaut 15 metres par defaut. La recherche PostGIS accepte
+ainsi un petit decalage entre une trace OSRM et une geometrie locale.

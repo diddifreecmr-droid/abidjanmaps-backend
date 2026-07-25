@@ -1,0 +1,98 @@
+{
+  "dataset": "phase2_demo_abidjan",
+  "version": 1,
+  "route_request": {
+    "start": {"lat": 5.336749, "lng": -4.02548},
+    "end": {"lat": 5.345702, "lng": -3.987915}
+  },
+  "roads": [
+    {
+      "seed_key": "phase2-alt1-car-moto",
+      "name": "Demo Alt 1 - passage voiture et moto",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-4.017578, 5.339857],
+          [-4.017626, 5.339906],
+          [-4.017656, 5.339966],
+          [-4.017684, 5.340026]
+        ]
+      },
+      "surface_state": "good",
+      "seasonal_practicability": "all_year",
+      "surface_reel": "asphalt",
+      "tonnage_max_reel_t": 10.0,
+      "point_controle": "none",
+      "width_usable_m": 3.2,
+      "type_flux": "free",
+      "allowed_vehicle_profiles": ["car", "motorcycle"],
+      "is_blocked": false
+    },
+    {
+      "seed_key": "phase2-alt1-motorcycle-only",
+      "name": "Demo Alt 1 - passage moto uniquement",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-4.017687, 5.340089],
+          [-4.017648, 5.340799],
+          [-4.017634, 5.34137],
+          [-4.017638, 5.342019]
+        ]
+      },
+      "surface_state": "good",
+      "seasonal_practicability": "all_year",
+      "surface_reel": "asphalt",
+      "tonnage_max_reel_t": 1.0,
+      "point_controle": "none",
+      "width_usable_m": 1.8,
+      "type_flux": "restricted",
+      "allowed_vehicle_profiles": ["motorcycle"],
+      "is_blocked": false
+    },
+    {
+      "seed_key": "phase2-alt2-heavy-vehicle",
+      "name": "Demo Alt 2 - boulevard poids lourds",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-4.007846, 5.335845],
+          [-4.007471, 5.335878],
+          [-4.007403, 5.335881],
+          [-4.007255, 5.335902]
+        ]
+      },
+      "surface_state": "good",
+      "seasonal_practicability": "all_year",
+      "surface_reel": "asphalt",
+      "tonnage_max_reel_t": 35.0,
+      "point_controle": "none",
+      "width_usable_m": 6.0,
+      "type_flux": "free",
+      "allowed_vehicle_profiles": ["car", "motorcycle", "truck"],
+      "is_blocked": false
+    },
+    {
+      "seed_key": "phase2-alt2-toll",
+      "name": "Demo Alt 2 - peage poids lourds",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-4.006982, 5.335933],
+          [-4.006732, 5.335952],
+          [-4.006503, 5.335966],
+          [-4.00619, 5.335985]
+        ]
+      },
+      "surface_state": "good",
+      "seasonal_practicability": "all_year",
+      "surface_reel": "asphalt",
+      "tonnage_max_reel_t": 35.0,
+      "point_controle": "none",
+      "width_usable_m": 5.5,
+      "type_flux": "toll",
+      "allowed_vehicle_profiles": ["car", "motorcycle", "truck"],
+      "is_blocked": false
+    }
+  ]
+}

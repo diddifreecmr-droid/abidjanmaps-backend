@@ -1,0 +1,105 @@
+name: abidjan-map
+
+services:
+  db:
+    image: postgis/postgis:16-3.5
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: mapdb
+      POSTGRES_USER: mapuser
+      POSTGRES_PASSWORD: mapdevpassword
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - postgis_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mapuser -d mapdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  osrm:
+    image: ghcr.io/project-osrm/osrm-backend
+    restart: unless-stopped
+
+    command:
+      - osrm-routed
+      - --algorithm
+      - mld
+      - /data/ivory-coast-latest.osrm
+
+    ports:
+      - "5000:5000"
+
+    volumes:
+      - ./data/osrm:/data
+
+  init-db:
+    build:
+      context: ./backend
+
+    restart: "no"
+
+    env_file:
+      - ./backend/.env
+
+    environment:
+      DATABASE_URL: postgresql+asyncpg://mapuser:mapdevpassword@db:5432/mapdb
+
+    command: ["alembic", "upgrade", "head"]
+
+    depends_on:
+      db:
+        condition: service_healthy
+
+  backend:
+    build:
+      context: ./backend
+
+    restart: unless-stopped
+
+    env_file:
+      - ./backend/.env
+
+    environment:
+      DATABASE_URL: postgresql+asyncpg://mapuser:mapdevpassword@db:5432/mapdb
+      OSRM_BASE_URL: http://osrm:5000
+      OSRM_USERNAME: ""
+      OSRM_PASSWORD: ""
+
+    ports:
+      - "8000:8000"
+
+    depends_on:
+      db:
+        condition: service_healthy
+      init-db:
+        condition: service_completed_successfully
+      osrm:
+        condition: service_started
+
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=3).read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  db-admin:
+    image: dpage/pgadmin4:latest
+    restart: unless-stopped
+    profiles: ["tools"]
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@abidjanmaps.local
+      PGADMIN_DEFAULT_PASSWORD: admin123
+    ports:
+      - "5050:80"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgis_data:
