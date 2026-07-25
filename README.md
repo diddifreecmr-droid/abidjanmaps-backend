@@ -99,3 +99,5 @@ pytest tests/integration/test_patch_workflow_postgis.py
 Consulter `guide.txt` pour le detail fichier par fichier,
 `backend/ARCHITECTURE.md` pour les decisions d'architecture et
 `DEPLOYMENT.md` pour le workflow GitHub, Portainer et Nginx Proxy Manager.
+Le contrat API et les use cases cote frontend sont resumes dans
+`FRONTEND_BRIEFING.md`.
