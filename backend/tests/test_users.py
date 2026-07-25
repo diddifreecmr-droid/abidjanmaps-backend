@@ -177,3 +177,31 @@ def test_login_rejects_invalid_credentials() -> None:
 
     assert response.status_code == 401
     assert response.headers["www-authenticate"] == "Bearer"
+
+
+def test_login_reports_invalid_json_body() -> None:
+    response = client.post(
+        "/api/v1/auth/login",
+        data="{'email':'admin@example.com','password':'ADMIN12345'}",
+        headers={"Content-Type": "application/json"},
+    )
+
+    body = response.json()
+    assert response.status_code == 400
+    assert body["code"] == "invalid_request"
+    assert body["message"] == "Invalid JSON body. Check quotes, commas and braces."
+    assert body["details"][0]["field"] == "body"
+    assert body["details"][0]["type"] == "json_invalid"
+
+
+def test_login_reports_missing_field() -> None:
+    response = client.post(
+        "/api/v1/auth/login",
+        json={"email": "admin@example.com"},
+    )
+
+    body = response.json()
+    assert response.status_code == 400
+    assert body["code"] == "invalid_request"
+    assert body["message"] == "Invalid field 'password': Field required"
+    assert body["details"][0]["field"] == "password"

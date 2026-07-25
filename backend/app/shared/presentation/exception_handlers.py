@@ -19,15 +19,60 @@ def _error(status_code: int, code: str, message: str) -> JSONResponse:
     )
 
 
+def _format_location(location: tuple | list) -> str:
+    parts: list[str] = []
+    for item in location:
+        if item == "body":
+            continue
+        if isinstance(item, int):
+            if parts:
+                parts[-1] = f"{parts[-1]}[{item}]"
+            else:
+                parts.append(f"[{item}]")
+            continue
+        parts.append(str(item))
+    return ".".join(parts) if parts else "body"
+
+
+def _format_validation_errors(exc: RequestValidationError) -> list[dict[str, str]]:
+    details: list[dict[str, str]] = []
+    for error in exc.errors():
+        error_type = str(error.get("type", "validation_error"))
+        reason = str(error.get("msg", "Invalid value"))
+        field = _format_location(error.get("loc", ("body",)))
+        if error_type == "json_invalid":
+            reason = "Invalid JSON body. Check quotes, commas and braces."
+            field = "body"
+        details.append(
+            {
+                "field": field,
+                "reason": reason,
+                "type": error_type,
+            }
+        )
+    return details
+
+
+def _validation_message(details: list[dict[str, str]]) -> str:
+    if any(detail["type"] == "json_invalid" for detail in details):
+        return "Invalid JSON body. Check quotes, commas and braces."
+    if len(details) == 1:
+        detail = details[0]
+        return f"Invalid field '{detail['field']}': {detail['reason']}"
+    return "Invalid request body. Check the details field."
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(_: Request, exc: RequestValidationError) -> JSONResponse:
+        details = _format_validation_errors(exc)
         return JSONResponse(
             status_code=400,
             content={
                 "status": "error",
                 "code": "invalid_request",
-                "message": "Description lisible de l'erreur",
+                "message": _validation_message(details),
+                "details": details,
             },
         )
 
