@@ -1,0 +1,62 @@
+name: abidjan-map
+
+services:
+  db:
+    image: postgis/postgis:16-3.5
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-mapdb}
+      POSTGRES_USER: ${POSTGRES_USER:-mapuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mapdevpassword}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgis_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  osrm:
+    image: ghcr.io/project-osrm/osrm-backend
+    restart: unless-stopped
+    command:
+      - osrm-routed
+      - --algorithm
+      - mld
+      - /data/ivory-coast-latest.osrm
+    ports:
+      - "${OSRM_PORT:-5000}:5000"
+    volumes:
+      - ${OSRM_DATA_PATH:-/opt/abidjanmaps/osrm}:/data:ro
+
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-mapuser}:${POSTGRES_PASSWORD:-mapdevpassword}@db:5432/${POSTGRES_DB:-mapdb}
+      OSRM_BASE_URL: http://osrm:5000
+      OSRM_USERNAME: ""
+      OSRM_PASSWORD: ""
+      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY:-dev-only-change-this-secret-before-deployment}
+    command:
+      - sh
+      - -c
+      - alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      osrm:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=3).read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgis_data:
