@@ -62,6 +62,12 @@ docker compose exec backend python -m scripts.create_user --email admin@example.
 
 Le script demande le mot de passe deux fois sans l'afficher.
 
+Reinitialisation du mot de passe d'un compte existant:
+
+```powershell
+docker compose exec backend python -m scripts.create_user --email admin@example.com --reset-password
+```
+
 Connexion:
 
 ```powershell
@@ -90,5 +96,6 @@ $env:DATABASE_URL="postgresql+asyncpg://mapuser:mapdevpassword@127.0.0.1:5432/ma
 pytest tests/integration/test_patch_workflow_postgis.py
 ```
 
-Consulter `guide.txt` pour le detail fichier par fichier et
-`backend/ARCHITECTURE.md` pour les decisions d'architecture.
+Consulter `guide.txt` pour le detail fichier par fichier,
+`backend/ARCHITECTURE.md` pour les decisions d'architecture et
+`DEPLOYMENT.md` pour le workflow GitHub, Portainer et Nginx Proxy Manager.

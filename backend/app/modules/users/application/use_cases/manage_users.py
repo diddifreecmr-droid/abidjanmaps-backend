@@ -12,6 +12,10 @@ class InvalidCredentialsError(Exception):
     pass
 
 
+class UserNotFoundError(Exception):
+    pass
+
+
 class UserService:
     def __init__(
         self,
@@ -40,6 +44,19 @@ class UserService:
             User(email=normalized_email, role=role),
             self.password_hasher.hash(password),
         )
+
+    async def reset_password(self, *, email: str, password: str) -> User:
+        normalized_email = normalize_email(email)
+        if len(password) < 10:
+            raise ValueError("Password must contain at least 10 characters")
+
+        user = await self.repository.update_password(
+            normalized_email,
+            self.password_hasher.hash(password),
+        )
+        if user is None:
+            raise UserNotFoundError("User not found")
+        return user
 
     async def authenticate(self, *, email: str, password: str) -> tuple[User, str]:
         stored = await self.repository.get_by_email(normalize_email(email))

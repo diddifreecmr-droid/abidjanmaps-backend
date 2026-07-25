@@ -45,6 +45,19 @@ class SQLAlchemyUserRepository(UserRepository):
         orm = result.scalar_one_or_none()
         return _to_domain(orm) if orm is not None else None
 
+    async def update_password(self, email: str, password_hash: str) -> User | None:
+        result = await self.session.execute(
+            select(UserORM).where(UserORM.email == normalize_email(email))
+        )
+        orm = result.scalar_one_or_none()
+        if orm is None:
+            return None
+
+        orm.password_hash = password_hash
+        await self.session.commit()
+        await self.session.refresh(orm)
+        return _to_domain(orm)
+
     async def list_all(self) -> list[User]:
         result = await self.session.execute(select(UserORM).order_by(UserORM.id))
         return [_to_domain(orm) for orm in result.scalars().all()]
