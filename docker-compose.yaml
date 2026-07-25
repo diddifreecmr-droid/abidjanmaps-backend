@@ -62,8 +62,8 @@ services:
 
     restart: unless-stopped
 
-    env_file:
-      - ./backend/.env
+    # env_file:
+    #   - ./backend/.env
 
     environment:
       DATABASE_URL: postgresql+asyncpg://mapuser:mapdevpassword@db:5432/mapdb
