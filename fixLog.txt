@@ -202,3 +202,8 @@ Pourquoi: Les donnees de cartographie influencent le scoring et ne doivent pas p
 Changement: L'auteur des signalements, modifications et validations vient maintenant du jeton authentifie.
 Effet: reported_by, changed_by et reviewed_by ne peuvent plus etre falsifies par le JSON du client. Des tests unitaires et un test PostgreSQL avec rollback couvrent ce workflow.
 Pourquoi: Un historique n'est utile pour l'audit que si l'identite enregistree est controlee par le backend.
+
+2026-07-25 12:35:13
+Changement: Ajout de docker-compose.portainer.yaml pour le deploiement depuis GitHub via Portainer.
+Effet: Le deploiement Portainer n'utilise plus le service one-shot init-db. Le backend applique les migrations Alembic au demarrage, puis lance FastAPI. Les variables importantes comme POSTGRES_PASSWORD, AUTH_SECRET_KEY et OSRM_DATA_PATH sont declarables dans Portainer.
+Pourquoi: Portainer peut considerer un conteneur de migration qui se termine comme une erreur de stack. Cette version garde le docker-compose local intact, mais propose un chemin plus stable pour le serveur. Les fichiers OSRM restent hors Git et doivent etre montes depuis un dossier serveur.

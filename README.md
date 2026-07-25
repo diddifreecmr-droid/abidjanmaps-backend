@@ -24,6 +24,36 @@ curl http://127.0.0.1:8000/api/v1/health
 
 Documentation OpenAPI: `http://127.0.0.1:8000/docs`
 
+## Deploiement Portainer
+
+Pour un deploiement depuis GitHub dans Portainer, utiliser:
+
+```text
+docker-compose.portainer.yaml
+```
+
+Ce fichier ne lance pas le service one-shot `init-db`. Le backend applique
+`alembic upgrade head` au demarrage, puis lance FastAPI. C'est plus compatible
+avec Portainer, qui peut traiter les conteneurs one-shot comme des erreurs de
+stack.
+
+Variables a definir dans Portainer:
+
+```text
+POSTGRES_DB=mapdb
+POSTGRES_USER=mapuser
+POSTGRES_PASSWORD=mot-de-passe-fort
+AUTH_SECRET_KEY=long-secret-aleatoire
+OSRM_DATA_PATH=/opt/abidjanmaps/osrm
+BACKEND_PORT=8000
+OSRM_PORT=5000
+POSTGRES_PORT=5432
+```
+
+Le dossier serveur `OSRM_DATA_PATH` doit contenir les fichiers OSRM, dont
+`ivory-coast-latest.osrm`. Ces fichiers ne sont pas suivis dans GitHub parce
+qu'ils sont volumineux et regenerables.
+
 ## Premier administrateur
 
 ```powershell
