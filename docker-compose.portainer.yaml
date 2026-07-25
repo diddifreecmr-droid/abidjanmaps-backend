@@ -46,7 +46,7 @@ services:
       - -c
       - alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000
     ports:
-      - "${BACKEND_PORT:-8001}:8001"
+      - "${BACKEND_PORT:-8001}:8000"
     depends_on:
       db:
         condition: service_healthy
