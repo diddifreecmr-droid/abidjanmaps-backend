@@ -17,5 +17,9 @@ class UserRepository(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def update_password(self, email: str, password_hash: str) -> User | None:
+        raise NotImplementedError
+
+    @abstractmethod
     async def list_all(self) -> list[User]:
         raise NotImplementedError

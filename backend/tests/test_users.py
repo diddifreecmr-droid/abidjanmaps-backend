@@ -1,8 +1,11 @@
+import asyncio
+
 from fastapi.testclient import TestClient
 
 from app.main import app
 from app.modules.users.application.use_cases.manage_users import (
     InvalidCredentialsError,
+    UserService,
 )
 from app.modules.users.domain.entities.user import User
 from app.modules.users.infrastructure.security.jwt_token_service import JWTTokenService
@@ -32,6 +35,59 @@ def test_password_is_hashed_and_verified_with_argon2() -> None:
     assert password_hash.startswith("$argon2")
     assert hasher.verify("a-secure-password", password_hash) is True
     assert hasher.verify("wrong-password", password_hash) is False
+
+
+def test_user_service_can_reset_password() -> None:
+    class FakeHasher:
+        def hash(self, password: str) -> str:
+            return f"hashed:{password}"
+
+        def verify(self, password: str, password_hash: str) -> bool:
+            return password_hash == f"hashed:{password}"
+
+    class FakeTokenService:
+        def create(self, user_id: int, role: str) -> str:
+            return f"token:{user_id}:{role}"
+
+        def decode(self, token: str):
+            return None
+
+    class FakeRepository:
+        def __init__(self) -> None:
+            self.password_hash = "old-hash"
+
+        async def create(self, user: User, password_hash: str) -> User:
+            raise AssertionError("create should not be called")
+
+        async def get_by_email(self, email: str):
+            return User(id=9, email=email, role="admin"), self.password_hash
+
+        async def get_by_id(self, user_id: int) -> User | None:
+            return User(id=user_id, email="admin@example.com", role="admin")
+
+        async def update_password(self, email: str, password_hash: str) -> User | None:
+            self.password_hash = password_hash
+            return User(id=9, email=email, role="admin")
+
+        async def list_all(self) -> list[User]:
+            return []
+
+    repository = FakeRepository()
+    service = UserService(
+        repository=repository,
+        password_hasher=FakeHasher(),
+        token_service=FakeTokenService(),
+    )
+
+    user = asyncio.run(
+        service.reset_password(
+            email="ADMIN@example.com",
+            password="new-password-123",
+        )
+    )
+
+    assert user.email == "admin@example.com"
+    assert repository.password_hash == "hashed:new-password-123"
 
 
 def test_jwt_round_trip_preserves_identity_and_role() -> None:
