@@ -25,10 +25,16 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origin_regex=(
-            r"^https?://(localhost|127\.0\.0\.1|"
+            r"^https?://("
+            r"localhost|"
+            r"127\.0\.0\.1|"
+            r"169\.58\.70\.37|"
+            r"diddifree\.com|"
+            r"www\.diddifree\.com|"
             r"192\.168\.\d{1,3}\.\d{1,3}|"
             r"10\.\d{1,3}\.\d{1,3}\.\d{1,3}|"
-            r"172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3})(:\d+)?$"
+            r"172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}"
+            r")(:\d+)?$"
         ),
         allow_credentials=True,
         allow_methods=["*"],
