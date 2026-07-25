@@ -217,3 +217,8 @@ Pourquoi: Le projet commence a passer d'un backend local a une vraie organisatio
 Changement: Ajout de l'option --reset-password au script scripts.create_user.
 Effet: Sur staging ou production, on peut maintenant reinitialiser le mot de passe d'un utilisateur existant sans manipuler directement PostgreSQL. La documentation de deploiement rappelle que chaque environnement a sa propre base utilisateurs.
 Pourquoi: Un compte cree en local n'existe pas automatiquement sur le VPS. Cette commande facilite la correction d'un login invalide apres un deploiement Portainer.
+
+2026-07-25 14:14:50
+Changement: Amelioration des erreurs de validation FastAPI.
+Effet: Les requetes invalides retournent maintenant un message clair et un champ details avec le champ concerne, la raison et le type d'erreur. Un JSON mal forme indique explicitement "Invalid JSON body" au lieu du message placeholder.
+Pourquoi: Les erreurs curl sous Windows peuvent venir de guillemets mal echappes. Le backend doit aider a comprendre si le probleme vient du JSON, d'un champ manquant ou des identifiants.
