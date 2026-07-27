@@ -30,6 +30,13 @@ def _point_to_geojson(schema) -> dict:
     return {"type": "Point", "coordinates": [schema.lng, schema.lat]}
 
 
+def _geojson_point_to_schema(geometry: dict | None) -> dict | None:
+    if not geometry:
+        return None
+    lng, lat = geometry["coordinates"]
+    return {"lng": lng, "lat": lat}
+
+
 def _report_response(report: RouteReport) -> dict:
     return {
         "id": report.id,
@@ -37,6 +44,7 @@ def _report_response(report: RouteReport) -> dict:
         "report_type": report.report_type,
         "severity": report.severity,
         "message": report.message,
+        "geometry": _geojson_point_to_schema(report.geometry),
         "reported_by": report.reported_by,
         "validation_status": report.validation_status,
         "reviewed_by": report.reviewed_by,
@@ -73,7 +81,6 @@ async def create_route_report(
     created = await _workflow(session).propose(report)
     return RouteReportReadSchema(
         **_report_response(created),
-        geometry=payload.geometry,
     )
 
 

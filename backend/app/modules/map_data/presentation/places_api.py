@@ -1,9 +1,13 @@
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.map_data.application.use_cases.update_map_data import UpdatePlace
 from app.modules.map_data.domain.entities.place import Place
 from app.shared.infrastructure.db import get_async_session
+from app.modules.map_data.infrastructure.persistence.models import PlaceORM
 from app.modules.map_data.infrastructure.persistence.place_repository import SQLAlchemyPlaceRepository
 from app.modules.map_data.presentation.place_schemas import (
     PlaceCreateSchema,
@@ -20,11 +24,33 @@ def _point_to_geojson(schema) -> dict:
     return {"type": "Point", "coordinates": [schema.lng, schema.lat]}
 
 
-def _place_response(place) -> dict:
+def _geojson_point_to_lat_lng(geojson: dict | None) -> dict | None:
+    if not geojson:
+        return None
+    lng, lat = geojson["coordinates"]
+    return {"lng": lng, "lat": lat}
+
+
+async def _place_location(place, session: AsyncSession) -> dict | None:
+    if getattr(place, "location", None) is not None:
+        location = place.location
+        if "lat" in location and "lng" in location:
+            return location
+        return _geojson_point_to_lat_lng(location)
+    if getattr(place, "id", None) is None or not hasattr(session, "scalar"):
+        return None
+    geojson = await session.scalar(
+        select(func.ST_AsGeoJSON(PlaceORM.location)).where(PlaceORM.id == place.id)
+    )
+    return _geojson_point_to_lat_lng(json.loads(geojson)) if geojson else None
+
+
+async def _place_response(place, session: AsyncSession) -> dict:
     return {
         "id": place.id,
         "name": place.name,
         "category": place.category,
+        "location": await _place_location(place, session),
         "aliases": place.aliases,
         "vernacular_name": getattr(place, "vernacular_name", None),
         "description": place.description,
@@ -65,7 +91,7 @@ async def create_place(
 async def list_places(session: AsyncSession = Depends(get_async_session)) -> list[dict]:
     repo = SQLAlchemyPlaceRepository(session)
     places = await repo.list_all()
-    return [_place_response(place) for place in places]
+    return [await _place_response(place, session) for place in places]
 
 
 @router.get("/places/search")
@@ -75,7 +101,7 @@ async def search_places(
 ) -> list[dict]:
     repo = SQLAlchemyPlaceRepository(session)
     places = await repo.search(q)
-    return [_place_response(place) for place in places]
+    return [await _place_response(place, session) for place in places]
 
 
 @router.get("/places/{place_id}")
@@ -84,7 +110,7 @@ async def get_place(place_id: int, session: AsyncSession = Depends(get_async_ses
     place = await repo.get_by_id(place_id)
     if place is None:
         raise HTTPException(status_code=404, detail="Place not found")
-    return _place_response(place)
+    return await _place_response(place, session)
 
 
 @router.patch("/places/{place_id}")
@@ -108,7 +134,7 @@ async def update_place(
     )
     if place is None:
         raise HTTPException(status_code=404, detail="Place not found")
-    return _place_response(place)
+    return await _place_response(place, session)
 
 
 @router.post("/places/{place_id}/validate")
@@ -125,7 +151,7 @@ async def validate_place(
     )
     if place is None:
         raise HTTPException(status_code=404, detail="Place not found")
-    return _place_response(place)
+    return await _place_response(place, session)
 
 
 @router.post("/places/{place_id}/reject")
@@ -142,7 +168,7 @@ async def reject_place(
     )
     if place is None:
         raise HTTPException(status_code=404, detail="Place not found")
-    return _place_response(place)
+    return await _place_response(place, session)
 
 
 @router.get("/places/{place_id}/history")

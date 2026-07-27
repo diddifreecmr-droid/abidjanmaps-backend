@@ -1,10 +1,14 @@
+import json
+
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.map_data.application.use_cases.update_map_data import UpdateRoad
 from app.modules.map_data.domain.entities.road import Road
 from app.modules.map_data.domain.taxonomy import road_taxonomy_documentation
 from app.shared.infrastructure.db import get_async_session
+from app.modules.map_data.infrastructure.persistence.models import RoadORM
 from app.modules.map_data.infrastructure.persistence.road_repository import SQLAlchemyRoadRepository
 from app.modules.map_data.presentation.road_schemas import (
     RoadCreateSchema,
@@ -26,10 +30,22 @@ def _line_string_to_geojson(schema) -> dict:
     return {"type": schema.type, "coordinates": schema.coordinates}
 
 
-def _road_response(road) -> dict:
+async def _road_geometry(road, session: AsyncSession) -> dict | None:
+    if getattr(road, "geometry", None) is not None:
+        return road.geometry
+    if getattr(road, "id", None) is None or not hasattr(session, "scalar"):
+        return None
+    geojson = await session.scalar(
+        select(func.ST_AsGeoJSON(RoadORM.geom)).where(RoadORM.id == road.id)
+    )
+    return json.loads(geojson) if geojson else None
+
+
+async def _road_response(road, session: AsyncSession) -> dict:
     return {
         "id": road.id,
         "name": road.name,
+        "geometry": await _road_geometry(road, session),
         "surface_state": road.surface_state,
         "seasonal_practicability": road.seasonal_practicability,
         "surface_reel": getattr(road, "surface_reel", None),
@@ -91,7 +107,7 @@ async def create_road(
 async def list_roads(session: AsyncSession = Depends(get_async_session)) -> list[dict]:
     repo = SQLAlchemyRoadRepository(session)
     roads = await repo.list_all()
-    return [_road_response(road) for road in roads]
+    return [await _road_response(road, session) for road in roads]
 
 
 @router.get("/roads/{road_id}")
@@ -100,7 +116,7 @@ async def get_road(road_id: int, session: AsyncSession = Depends(get_async_sessi
     road = await repo.get_by_id(road_id)
     if road is None:
         raise HTTPException(status_code=404, detail="Road not found")
-    return _road_response(road)
+    return await _road_response(road, session)
 
 
 @router.patch("/roads/{road_id}")
@@ -124,7 +140,7 @@ async def update_road(
     )
     if road is None:
         raise HTTPException(status_code=404, detail="Road not found")
-    return _road_response(road)
+    return await _road_response(road, session)
 
 
 @router.post("/roads/{road_id}/validate")
@@ -141,7 +157,7 @@ async def validate_road(
     )
     if road is None:
         raise HTTPException(status_code=404, detail="Road not found")
-    return _road_response(road)
+    return await _road_response(road, session)
 
 
 @router.post("/roads/{road_id}/reject")
@@ -158,7 +174,7 @@ async def reject_road(
     )
     if road is None:
         raise HTTPException(status_code=404, detail="Road not found")
-    return _road_response(road)
+    return await _road_response(road, session)
 
 
 @router.get("/roads/{road_id}/history")

@@ -23,6 +23,18 @@ class SQLAlchemyRouteReportRepository(RouteReportRepository):
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
+    async def _from_orm_with_geometry(self, report: RouteReportORM) -> RouteReport:
+        domain_report = route_report_from_orm(report)
+        if report.geometry is None:
+            return domain_report
+
+        geojson = await self.session.scalar(
+            select(func.ST_AsGeoJSON(RouteReportORM.geometry)).where(
+                RouteReportORM.id == report.id
+            )
+        )
+        return replace(domain_report, geometry=json.loads(geojson) if geojson else None)
+
     async def create(self, report: RouteReport) -> RouteReport:
         orm = route_report_to_orm(report)
         self.session.add(orm)
@@ -46,12 +58,15 @@ class SQLAlchemyRouteReportRepository(RouteReportRepository):
         if validation_status is not None:
             statement = statement.where(RouteReportORM.validation_status == validation_status)
         result = await self.session.execute(statement.order_by(RouteReportORM.id.desc()))
-        return [route_report_from_orm(item) for item in result.scalars().all()]
+        return [
+            await self._from_orm_with_geometry(item)
+            for item in result.scalars().all()
+        ]
 
     async def get_by_id(self, report_id: int) -> RouteReport | None:
         result = await self.session.execute(select(RouteReportORM).where(RouteReportORM.id == report_id))
         report = result.scalar_one_or_none()
-        return route_report_from_orm(report) if report is not None else None
+        return await self._from_orm_with_geometry(report) if report is not None else None
 
     async def update(
         self,
@@ -116,7 +131,7 @@ class SQLAlchemyRouteReportRepository(RouteReportRepository):
         )
         await self.session.commit()
         await self.session.refresh(report)
-        return route_report_from_orm(report)
+        return await self._from_orm_with_geometry(report)
 
     async def set_validation_status(
         self,
@@ -148,7 +163,7 @@ class SQLAlchemyRouteReportRepository(RouteReportRepository):
         )
         await self.session.commit()
         await self.session.refresh(report)
-        return route_report_from_orm(report)
+        return await self._from_orm_with_geometry(report)
 
     async def list_history(self, report_id: int) -> list[RouteReportHistoryORM]:
         result = await self.session.execute(
