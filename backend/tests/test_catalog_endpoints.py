@@ -24,9 +24,11 @@ class FakeRoad:
         allowed_vehicle_profiles: list[str],
         is_blocked: bool,
         extra_metadata: dict,
+        geometry: dict | None = None,
     ) -> None:
         self.id = road_id
         self.name = name
+        self.geometry = geometry
         self.surface_state = surface_state
         self.seasonal_practicability = seasonal_practicability
         self.width_usable_m = width_usable_m
@@ -38,10 +40,21 @@ class FakeRoad:
 
 
 class FakePlace:
-    def __init__(self, place_id: int, name: str, category: str, aliases: list[str], description: str | None, verified: bool, extra_metadata: dict) -> None:
+    def __init__(
+        self,
+        place_id: int,
+        name: str,
+        category: str,
+        aliases: list[str],
+        description: str | None,
+        verified: bool,
+        extra_metadata: dict,
+        location: dict | None = None,
+    ) -> None:
         self.id = place_id
         self.name = name
         self.category = category
+        self.location = location
         self.aliases = aliases
         self.description = description
         self.verified = verified
@@ -50,12 +63,23 @@ class FakePlace:
 
 
 class FakeRouteReport:
-    def __init__(self, report_id: int, road_id: int | None, report_type: str, severity: int, message: str, reported_by: str | None, extra_metadata: dict) -> None:
+    def __init__(
+        self,
+        report_id: int,
+        road_id: int | None,
+        report_type: str,
+        severity: int,
+        message: str,
+        reported_by: str | None,
+        extra_metadata: dict,
+        geometry: dict | None = None,
+    ) -> None:
         self.id = report_id
         self.road_id = road_id
         self.report_type = report_type
         self.severity = severity
         self.message = message
+        self.geometry = geometry
         self.reported_by = reported_by
         self.validation_status = "proposed"
         self.reviewed_by = None
@@ -129,6 +153,7 @@ class FakeRoadRepository:
             allowed_vehicle_profiles=road.allowed_vehicle_profiles,
             is_blocked=road.is_blocked,
             extra_metadata=road.metadata,
+            geometry=road.geometry,
         )
         self.__class__.store.append(item)
         self.__class__.next_id += 1
@@ -207,6 +232,7 @@ class FakePlaceRepository:
             description=place.description,
             verified=place.verified,
             extra_metadata=place.metadata,
+            location=place.location,
         )
         self.__class__.store.append(item)
         self.__class__.next_id += 1
@@ -283,6 +309,7 @@ class FakeRouteReportRepository:
             message=report.message,
             reported_by=report.reported_by,
             extra_metadata=report.metadata,
+            geometry=report.geometry,
         )
         self.__class__.store.append(item)
         self.__class__.history.append(
@@ -487,6 +514,10 @@ def test_create_and_get_road() -> None:
     response = client.get("/api/v1/roads/1")
     assert response.status_code == 200
     assert response.json()["name"] == "Route de Cocody"
+    assert response.json()["geometry"] == {
+        "type": "LineString",
+        "coordinates": [[-4.02, 5.33], [-3.99, 5.34]],
+    }
     assert response.json()["allowed_vehicle_profiles"] == ["car", "motorcycle"]
 
 
@@ -507,6 +538,7 @@ def test_list_places() -> None:
     assert response.status_code == 200
     assert len(response.json()) == 1
     assert response.json()[0]["name"] == "Carrefour Anador"
+    assert response.json()[0]["location"] == {"lng": -4.0, "lat": 5.3}
 
 
 def test_create_and_get_route_report() -> None:
@@ -530,6 +562,7 @@ def test_create_and_get_route_report() -> None:
     response = client.get("/api/v1/route-reports/1")
     assert response.status_code == 200
     assert response.json()["report_type"] == "flood"
+    assert response.json()["geometry"] == {"lng": -4.01, "lat": 5.31}
 
 
 def test_route_report_must_be_reviewed_before_publication() -> None:
