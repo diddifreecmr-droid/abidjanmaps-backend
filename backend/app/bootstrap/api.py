@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from app.modules.journeys.presentation.api import router as journeys_router
 from app.modules.local_enrichment.presentation.api import router as route_reports_router
 from app.modules.map_data.presentation.places_api import router as places_router
 from app.modules.map_data.presentation.roads_api import router as roads_router
@@ -13,6 +14,7 @@ router = APIRouter()
 router.include_router(health_router)
 router.include_router(db_health_router)
 router.include_router(users_router)
+router.include_router(journeys_router)
 router.include_router(roads_router)
 router.include_router(places_router)
 router.include_router(route_reports_router)
