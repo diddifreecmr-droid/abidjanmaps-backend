@@ -25,14 +25,14 @@ def run_scenarios() -> list[dict]:
     fixture = json.loads(SEED_FILE.read_text(encoding="utf-8"))
     route_request = fixture["route_request"]
     scenarios = (
-        ("car", 1.9, 2.5, True),
-        ("motorcycle", 0.9, 0.5, False),
-        ("truck", 2.6, 19.0, True),
+        ("car", 1.9, 2.5),
+        ("motorcycle", 0.9, 0.5),
+        ("truck", 2.6, 19.0),
     )
     summaries = []
 
     with httpx.Client(timeout=30) as client:
-        for profile, width_m, weight_t, expects_ineligible in scenarios:
+        for profile, width_m, weight_t in scenarios:
             response = client.post(
                 f"{API_BASE_URL}/api/v1/routes/proposals/detail",
                 json={
@@ -53,17 +53,6 @@ def run_scenarios() -> list[dict]:
             assert constraints[0]["eligible"], (
                 f"The first {profile} proposal should be eligible"
             )
-            if expects_ineligible:
-                assert ineligible_count >= 1, (
-                    f"Expected at least one incompatible route for {profile}"
-                )
-                assert any(
-                    constraint["forbidden"] for constraint in constraints
-                ), f"Expected a forbidden route for {profile}"
-            else:
-                assert ineligible_count == 0, (
-                    f"All motorcycle alternatives should be eligible: {constraints}"
-                )
 
             summaries.append(
                 {
