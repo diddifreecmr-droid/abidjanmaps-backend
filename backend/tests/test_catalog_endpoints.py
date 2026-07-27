@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -539,6 +541,22 @@ def test_list_places() -> None:
     assert len(response.json()) == 1
     assert response.json()[0]["name"] == "Carrefour Anador"
     assert response.json()[0]["location"] == {"lng": -4.0, "lat": 5.3}
+
+
+def test_place_location_reads_postgis_geometry_when_location_is_not_a_dict() -> None:
+    class FakePostgisPlace:
+        id = 1
+        location = object()
+
+    class FakeSession:
+        async def scalar(self, statement):
+            return '{"type":"Point","coordinates":[-4.0,5.3]}'
+
+    location = asyncio.run(
+        places_module._place_location(FakePostgisPlace(), FakeSession())
+    )
+
+    assert location == {"lng": -4.0, "lat": 5.3}
 
 
 def test_create_and_get_route_report() -> None:

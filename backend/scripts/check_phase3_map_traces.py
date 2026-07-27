@@ -76,24 +76,44 @@ def _login(client: httpx.Client) -> str:
 def run_checks() -> dict[str, Any]:
     with httpx.Client(timeout=30) as client:
         token = _login(client)
-        lng_offset = (uuid.uuid4().int % 100) / 1000
+        random_seed = uuid.uuid4().int
+        lng_offset = (random_seed % 9000) / 100000
+        lat_offset = ((random_seed // 10000) % 9000) / 100000
 
         started = _post_json(
             client,
             "/api/v1/map-traces/start",
             {
-                "start": {"lng": round(-4.02003 + lng_offset, 6), "lat": 5.3329},
-                "end": {"lng": round(-4.0178 + lng_offset, 6), "lat": 5.3344},
+                "start": {
+                    "lng": round(-4.02003 + lng_offset, 6),
+                    "lat": round(5.3329 + lat_offset, 6),
+                },
+                "end": {
+                    "lng": round(-4.0178 + lng_offset, 6),
+                    "lat": round(5.3344 + lat_offset, 6),
+                },
                 "profile": "car",
                 "planned_distance_m": 250,
                 "planned_duration_s": 120,
                 "planned_route_geometry": {
                     "type": "LineString",
                     "coordinates": [
-                        [round(-4.02003 + lng_offset, 6), 5.3329],
-                        [round(-4.0194 + lng_offset, 6), 5.3334],
-                        [round(-4.0186 + lng_offset, 6), 5.3339],
-                        [round(-4.0178 + lng_offset, 6), 5.3344],
+                        [
+                            round(-4.02003 + lng_offset, 6),
+                            round(5.3329 + lat_offset, 6),
+                        ],
+                        [
+                            round(-4.0194 + lng_offset, 6),
+                            round(5.3334 + lat_offset, 6),
+                        ],
+                        [
+                            round(-4.0186 + lng_offset, 6),
+                            round(5.3339 + lat_offset, 6),
+                        ],
+                        [
+                            round(-4.0178 + lng_offset, 6),
+                            round(5.3344 + lat_offset, 6),
+                        ],
                     ],
                 },
             },
@@ -106,28 +126,28 @@ def run_checks() -> dict[str, Any]:
             "positions": [
                 {
                     "lng": round(-4.02003 + lng_offset, 6),
-                    "lat": 5.3329,
+                    "lat": round(5.3329 + lat_offset, 6),
                     "accuracy_m": 8,
                     "speed_mps": 2.1,
                     "recorded_at": _iso(started_at + timedelta(seconds=0)),
                 },
                 {
                     "lng": round(-4.0194 + lng_offset, 6),
-                    "lat": 5.3334,
+                    "lat": round(5.3334 + lat_offset, 6),
                     "accuracy_m": 9,
                     "speed_mps": 2.4,
                     "recorded_at": _iso(started_at + timedelta(seconds=45)),
                 },
                 {
                     "lng": round(-4.0186 + lng_offset, 6),
-                    "lat": 5.3339,
+                    "lat": round(5.3339 + lat_offset, 6),
                     "accuracy_m": 7,
                     "speed_mps": 2.8,
                     "recorded_at": _iso(started_at + timedelta(seconds=95)),
                 },
                 {
                     "lng": round(-4.0178 + lng_offset, 6),
-                    "lat": 5.3344,
+                    "lat": round(5.3344 + lat_offset, 6),
                     "accuracy_m": 8,
                     "speed_mps": 2.3,
                     "recorded_at": _iso(started_at + timedelta(seconds=180)),
@@ -185,7 +205,24 @@ def run_checks() -> dict[str, Any]:
         matching_insights = [
             insight for insight in insights if insight["trace_id"] == trace_id
         ]
-        assert matching_insights, "Expected at least one proposed insight for the trace"
+        evidence_target_trace_id = trace_id
+        reused_existing_insight = False
+        if not matching_insights:
+            all_insights = _get_json(
+                client,
+                "/api/v1/map-trace-insights?sort=newest&order=desc",
+                token=token,
+            )
+            matching_insights = [
+                insight
+                for insight in all_insights
+                if insight["latest_evidence_trace_id"] == trace_id
+            ]
+            reused_existing_insight = bool(matching_insights)
+        assert matching_insights, (
+            "Expected a new proposed insight or an existing insight updated with "
+            "latest_evidence_trace_id for the trace"
+        )
         reviewed = _post_json(
             client,
             f"/api/v1/map-trace-insights/{matching_insights[0]['id']}/validate",
@@ -200,9 +237,11 @@ def run_checks() -> dict[str, Any]:
             f"/api/v1/map-trace-insights/{reviewed['id']}/detail",
             token=token,
         )
-        assert insight_detail["trace_id"] == trace_id
-        assert insight_detail["trace"]["id"] == trace_id
-        assert insight_detail["analysis"]["trace_id"] == trace_id
+        assert insight_detail["trace_id"] == reviewed["trace_id"]
+        assert insight_detail["trace"]["id"] == reviewed["trace_id"]
+        assert insight_detail["analysis"]["trace_id"] == reviewed["trace_id"]
+        if reused_existing_insight:
+            assert reviewed["latest_evidence_trace_id"] == evidence_target_trace_id
         conversion = _post_json(
             client,
             f"/api/v1/map-trace-insights/{reviewed['id']}/convert-to-route-report",
@@ -231,6 +270,7 @@ def run_checks() -> dict[str, Any]:
             "status": "ok",
             "trace_id": trace_id,
             "lng_offset": round(lng_offset, 3),
+            "lat_offset": round(lat_offset, 3),
             "positions_count": len(positions),
             "actual_distance_m": finished["actual_distance_m"],
             "actual_duration_s": finished["actual_duration_s"],
@@ -255,6 +295,7 @@ def run_checks() -> dict[str, Any]:
                 "duplicate_key": reviewed["duplicate_key"],
                 "evidence_count": reviewed["evidence_count"],
                 "latest_evidence_trace_id": reviewed["latest_evidence_trace_id"],
+                "reused_existing_insight": reused_existing_insight,
                 "detail_loaded": True,
             },
             "route_report": {

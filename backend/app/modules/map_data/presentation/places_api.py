@@ -32,7 +32,7 @@ def _geojson_point_to_lat_lng(geojson: dict | None) -> dict | None:
 
 
 async def _place_location(place, session: AsyncSession) -> dict | None:
-    if getattr(place, "location", None) is not None:
+    if isinstance(getattr(place, "location", None), dict):
         location = place.location
         if "lat" in location and "lng" in location:
             return location
