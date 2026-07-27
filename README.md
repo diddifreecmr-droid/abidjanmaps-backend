@@ -100,4 +100,6 @@ Consulter `guide.txt` pour le detail fichier par fichier,
 `backend/ARCHITECTURE.md` pour les decisions d'architecture et
 `DEPLOYMENT.md` pour le workflow GitHub, Portainer et Nginx Proxy Manager.
 Le contrat API et les use cases cote frontend sont resumes dans
-`FRONTEND_BRIEFING.md`.
+`FRONTEND_BRIEFING.md`. L'etat des phases backend est suivi dans
+`PHASE_STATUS.md`. La separation entre tests automatiques, staging et domaine
+est expliquee dans `TESTING_GUIDE.md`.
