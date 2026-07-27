@@ -39,7 +39,7 @@ class JourneyFinishSchema(BaseModel):
 
 class JourneyPositionReadSchema(BaseModel):
     id: int
-    journey_id: int
+    trace_id: int
     location: GeoPointSchema
     accuracy_m: float | None = None
     speed_mps: float | None = None
@@ -67,3 +67,71 @@ class JourneyReadSchema(BaseModel):
 
 class JourneyDetailReadSchema(JourneyReadSchema):
     positions: list[JourneyPositionReadSchema]
+
+
+class JourneyAnalysisReadSchema(BaseModel):
+    id: int
+    trace_id: int
+    status: str
+    points_count: int
+    usable_points_count: int
+    quality_score: float
+    quality_label: str
+    actual_distance_m: float
+    actual_duration_s: int
+    average_speed_kmh: float
+    phone_average_speed_kmh: float | None = None
+    moving_time_s: int = 0
+    stopped_time_s: int = 0
+    max_speed_kmh: float = 0.0
+    gps_gap_count: int = 0
+    suspicious_jump_count: int = 0
+    planned_distance_m: int | None = None
+    planned_duration_s: int | None = None
+    distance_delta_m: float | None = None
+    duration_delta_s: int | None = None
+    duration_ratio: float | None = None
+    detected_events: list[dict[str, Any]]
+    recommendation: str
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class MapTraceInsightReadSchema(BaseModel):
+    id: int
+    trace_id: int
+    analysis_id: int
+    insight_type: str
+    severity: int
+    confidence_score: float
+    message: str
+    geometry: dict[str, Any] | None = None
+    duplicate_key: str | None = None
+    evidence_count: int = 1
+    latest_evidence_trace_id: int | None = None
+    status: str
+    reviewed_by: int | None = None
+    reviewed_at: datetime | None = None
+    review_note: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class MapTraceInsightReviewQueueItemSchema(MapTraceInsightReadSchema):
+    review_priority_score: float
+    recommended_action: str
+    conversion_ready: bool
+
+
+class MapTraceInsightReviewSchema(BaseModel):
+    note: str | None = Field(default=None, max_length=500)
+
+
+class MapTraceInsightDetailReadSchema(MapTraceInsightReadSchema):
+    trace: JourneyDetailReadSchema
+    analysis: JourneyAnalysisReadSchema
+
+
+class MapTraceInsightConversionReadSchema(BaseModel):
+    insight: MapTraceInsightReadSchema
+    route_report: dict[str, Any]

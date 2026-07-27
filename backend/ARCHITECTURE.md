@@ -10,7 +10,7 @@ app/
     map_data/      Routes, lieux, alias et catalogue geographique.
     local_enrichment/  Signalements, validation et publication terrain.
     users/         Comptes, authentification et autorisations.
-    journeys/      Collecte des trajets reels et positions GPS.
+    journeys/      Collecte de traces GPS Map Core, pas de courses DiddiGo.
   shared/          Composants techniques communs, volontairement limites.
 ```
 
@@ -23,7 +23,7 @@ La persistance suit la meme regle:
 - `map_data` possede les modeles ORM et mappers de roads, places et historiques;
 - `local_enrichment` possede les modeles ORM de route_reports et de leur historique;
 - `users` possede le modele ORM et le repository des comptes;
-- `journeys` possede les modeles ORM des trajets reels et positions GPS;
+- `journeys` possede les modeles ORM des traces GPS Map Core et positions GPS;
 - `shared` possede uniquement la classe Base et la session SQLAlchemy;
 - Alembic importe les modeles des modules pour construire une metadata unique.
 
@@ -91,13 +91,15 @@ Le fichier `phase2_roads.json` fournit un petit jeu de donnees de demonstration.
 charge par un script idempotent: une cle et une version de seed empechent les doublons.
 Ces donnees servent a valider les regles, pas a constituer la future base de production.
 
-## Collecte GPS Phase 3
+## Collecte GPS Map Core Phase 3
 
 Le module `journeys` ouvre la Phase 3 sans transformer le backend en plateforme VTC.
 Son objectif est de collecter des traces GPS exploitables par le Map Core.
+Le vocabulaire public utilise `map-traces` pour eviter la confusion avec les
+futures courses DiddiGo.
 
-Un utilisateur connecte peut demarrer un trajet, envoyer des positions GPS par batch,
-terminer le trajet et relire la trace. Les positions sont stockees en PostGIS `POINT`
+Un utilisateur connecte peut demarrer une trace terrain, envoyer des positions GPS par batch,
+terminer la trace et la relire. Les positions sont stockees en PostGIS `POINT`
 afin de preparer les futures analyses spatiales: ecarts route prevue/reelle, troncons
 lents, routes contournees et suggestions d'enrichissement.
 
