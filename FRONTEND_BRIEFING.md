@@ -464,6 +464,22 @@ GET /api/v1/roads
 
 Public.
 
+Chaque item retourne aussi:
+
+```json
+{
+  "geometry": {
+    "type": "LineString",
+    "coordinates": [
+      [-4.02, 5.33],
+      [-3.99, 5.34]
+    ]
+  }
+}
+```
+
+Le frontend peut donc dessiner les troncons locaux comme une couche cartographique.
+
 ### Lire une road
 
 ```http
@@ -587,6 +603,17 @@ etc.
 GET /api/v1/places
 ```
 
+Chaque item retourne aussi:
+
+```json
+{
+  "location": {
+    "lng": -4.0,
+    "lat": 5.3
+  }
+}
+```
+
 ### Rechercher une place
 
 ```http
@@ -650,6 +677,17 @@ GET /api/v1/route-reports
 GET /api/v1/route-reports?status=proposed
 GET /api/v1/route-reports?status=validated
 GET /api/v1/route-reports?status=rejected
+```
+
+Chaque signalement peut retourner:
+
+```json
+{
+  "geometry": {
+    "lng": -4.01,
+    "lat": 5.31
+  }
+}
 ```
 
 ### Creer un signalement

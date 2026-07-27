@@ -227,3 +227,13 @@ Pourquoi: Les erreurs curl sous Windows peuvent venir de guillemets mal echappes
 Changement: Ajout de FRONTEND_BRIEFING.md et lien depuis le README.
 Effet: Le developpeur frontend dispose maintenant d'un document complet sur les endpoints disponibles, les payloads, les reponses, les regles d'authentification, les use cases Phase 1/Phase 2 et les ecrans attendus.
 Pourquoi: Le backend est assez avance pour servir de contrat API au frontend. Documenter les use cases maintenant evite que l'interface parte dans une direction differente du plan backend.
+
+2026-07-27 10:34:28
+Changement: Ajout des coordonnees dans les reponses de couches locales et creation de PHASE_STATUS.md.
+Effet: Les endpoints roads, places et route_reports renvoient maintenant les geometries necessaires au frontend pour afficher les couches Phase 2 sur une carte. PHASE_STATUS.md resume ce qui est termine en Phase 1/2 et ce qui appartient a la Phase 3.
+Pourquoi: Une donnee locale sans coordonnees est lisible dans une table, mais pas exploitable sur une carte. La Phase 2 doit permettre d'ajouter, valider, afficher et utiliser les enrichissements locaux.
+
+2026-07-27 13:53:17
+Changement: Assouplissement du script check_phase2_scenarios et ajout de TESTING_GUIDE.md.
+Effet: Le script verifie maintenant que la meilleure proposition de chaque profil est eligible, sans imposer que toutes les alternatives moto le soient. TESTING_GUIDE.md clarifie les tests automatiques, les tests staging et les tests domaine.
+Pourquoi: Les alternatives OSRM peuvent varier entre local et VPS. Le test doit valider la regle metier importante: detecter les incompatibilites et classer une route eligible en premier.
