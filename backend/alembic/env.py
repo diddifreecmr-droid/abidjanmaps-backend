@@ -15,6 +15,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.modules.local_enrichment.infrastructure.persistence import models as enrichment_models
+from app.modules.journeys.infrastructure.persistence import models as journey_models
 from app.modules.map_data.infrastructure.persistence import models as map_data_models
 from app.modules.users.infrastructure.persistence import models as user_models
 from app.shared.configuration.settings import settings

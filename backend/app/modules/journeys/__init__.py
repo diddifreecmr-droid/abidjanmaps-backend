@@ -1,0 +1,1 @@
+"""Real journey collection module."""

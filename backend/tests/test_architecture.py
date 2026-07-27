@@ -1,5 +1,9 @@
 from pathlib import Path
 
+from app.modules.journeys.infrastructure.persistence.models import (
+    JourneyORM,
+    JourneyPositionORM,
+)
 from app.modules.local_enrichment.infrastructure.persistence.models import (
     RouteReportHistoryORM,
     RouteReportORM,
@@ -19,6 +23,8 @@ APP_ROOT = Path(__file__).resolve().parents[1] / "app"
 
 def test_module_owned_models_share_one_metadata_registry() -> None:
     assert set(Base.metadata.tables) == {
+        "journey_positions",
+        "journeys",
         "place_history",
         "places",
         "road_history",
@@ -35,6 +41,8 @@ def test_orm_models_are_owned_by_their_business_modules() -> None:
     assert RouteReportORM.__module__.startswith("app.modules.local_enrichment.")
     assert RouteReportHistoryORM.__module__.startswith("app.modules.local_enrichment.")
     assert UserORM.__module__.startswith("app.modules.users.")
+    assert JourneyORM.__module__.startswith("app.modules.journeys.")
+    assert JourneyPositionORM.__module__.startswith("app.modules.journeys.")
 
 
 def test_legacy_horizontal_architecture_is_absent() -> None:
