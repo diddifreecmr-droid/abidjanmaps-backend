@@ -2,6 +2,7 @@ import json
 import os
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -53,6 +54,16 @@ def run_checks() -> list[dict[str, Any]]:
         assert roads, "Expected at least one seeded road"
         assert any(road.get("geometry") for road in roads), "Roads must expose geometry"
         checks.append(_ok("roads", {"count": len(roads)}))
+
+        first_road_name = roads[0]["name"]
+        geocoding = _get_json(
+            client,
+            f"/api/v1/geocoding/search?q={quote(first_road_name)}",
+        )
+        assert isinstance(geocoding, list)
+        assert geocoding, "Expected geocoding search to find at least one road/place"
+        assert geocoding[0].get("location") is not None
+        checks.append(_ok("geocoding-search", {"count": len(geocoding)}))
 
         places = _get_json(client, "/api/v1/places")
         assert isinstance(places, list)

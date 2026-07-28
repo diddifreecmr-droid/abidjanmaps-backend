@@ -8,3 +8,4 @@ geoalchemy2
 alembic
 PyJWT
 pwdlib[argon2]
+osmium

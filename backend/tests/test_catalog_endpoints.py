@@ -3,6 +3,7 @@ import asyncio
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.modules.map_data.presentation import geocoding_api as geocoding_module
 from app.modules.routing.application.use_cases.calculate_route import CalculateRoute
 from app.modules.map_data.presentation import places_api as places_module
 from app.modules.map_data.presentation import roads_api as roads_module
@@ -164,6 +165,14 @@ class FakeRoadRepository:
     async def list_all(self):
         return list(self.__class__.store)
 
+    async def search(self, query: str, *, limit: int = 20):
+        normalized = query.lower()
+        return [
+            item
+            for item in self.__class__.store
+            if normalized in item.name.lower()
+        ][:limit]
+
     async def get_by_id(self, road_id: int):
         for item in self.__class__.store:
             if item.id == road_id:
@@ -242,6 +251,15 @@ class FakePlaceRepository:
 
     async def list_all(self):
         return list(self.__class__.store)
+
+    async def search(self, query: str):
+        normalized = query.lower()
+        return [
+            item
+            for item in self.__class__.store
+            if normalized in item.name.lower()
+            or any(normalized in alias.lower() for alias in item.aliases)
+        ]
 
     async def get_by_id(self, place_id: int):
         for item in self.__class__.store:
@@ -489,6 +507,8 @@ def setup_function() -> None:
     app.dependency_overrides[get_current_user] = override_current_user
     roads_module.SQLAlchemyRoadRepository = FakeRoadRepository
     places_module.SQLAlchemyPlaceRepository = FakePlaceRepository
+    geocoding_module.SQLAlchemyRoadRepository = FakeRoadRepository
+    geocoding_module.SQLAlchemyPlaceRepository = FakePlaceRepository
     route_reports_module.SQLAlchemyRouteReportRepository = FakeRouteReportRepository
     route_reports_module.SQLAlchemyRoadRepository = FakeRoadRepository
     from app.modules.routing.presentation import proposal_api as route_proposals_module
@@ -541,6 +561,64 @@ def test_list_places() -> None:
     assert len(response.json()) == 1
     assert response.json()[0]["name"] == "Carrefour Anador"
     assert response.json()[0]["location"] == {"lng": -4.0, "lat": 5.3}
+
+
+def test_search_roads_by_name() -> None:
+    client.post(
+        "/api/v1/roads",
+        json={
+            "name": "Boulevard Latrille",
+            "geometry": {
+                "type": "LineString",
+                "coordinates": [[-4.02, 5.33], [-3.99, 5.34]],
+            },
+            "surface_state": "good",
+            "seasonal_practicability": "all_year",
+            "allowed_vehicle_profiles": ["car", "motorcycle"],
+            "extra_metadata": {"source": "osm"},
+        },
+    )
+
+    response = client.get("/api/v1/roads/search?q=Latrille")
+
+    assert response.status_code == 200
+    assert response.json()[0]["name"] == "Boulevard Latrille"
+
+
+def test_geocoding_search_returns_places_and_roads() -> None:
+    client.post(
+        "/api/v1/places",
+        json={
+            "name": "Carrefour Anador",
+            "category": "landmark",
+            "location": {"lng": -4.0, "lat": 5.3},
+            "aliases": ["Anador"],
+            "description": "Repere local",
+            "extra_metadata": {"source": "osm"},
+        },
+    )
+    client.post(
+        "/api/v1/roads",
+        json={
+            "name": "Rue Anador",
+            "geometry": {
+                "type": "LineString",
+                "coordinates": [[-4.01, 5.31], [-4.0, 5.32], [-3.99, 5.33]],
+            },
+            "surface_state": "good",
+            "seasonal_practicability": "all_year",
+            "allowed_vehicle_profiles": ["car", "motorcycle"],
+            "extra_metadata": {"source": "osm"},
+        },
+    )
+
+    response = client.get("/api/v1/geocoding/search?q=Anador")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert {item["type"] for item in body} == {"place", "road"}
+    assert body[0]["location"]["lng"] == -4.0
+    assert any(item["label"] == "Rue Anador" for item in body)
 
 
 def test_place_location_reads_postgis_geometry_when_location_is_not_a_dict() -> None:

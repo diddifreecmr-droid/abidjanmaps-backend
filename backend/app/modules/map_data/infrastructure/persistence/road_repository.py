@@ -65,6 +65,16 @@ class SQLAlchemyRoadRepository(RoadRepository):
         result = await self.session.execute(select(RoadORM).order_by(RoadORM.id.desc()))
         return list(result.scalars().all())
 
+    async def search(self, query: str, *, limit: int = 20) -> list[RoadORM]:
+        like_query = f"%{query}%"
+        result = await self.session.execute(
+            select(RoadORM)
+            .where(RoadORM.name.ilike(like_query))
+            .order_by(RoadORM.id.desc())
+            .limit(limit)
+        )
+        return list(result.scalars().all())
+
     async def get_by_id(self, road_id: int) -> RoadORM | None:
         result = await self.session.execute(select(RoadORM).where(RoadORM.id == road_id))
         return result.scalar_one_or_none()
