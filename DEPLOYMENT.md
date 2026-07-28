@@ -130,6 +130,69 @@ Notes:
 - Si le port `8000` est deja occupe, utiliser `8001`, `8002` ou un autre port
   interne au serveur.
 
+## Donnees PostgreSQL/PostGIS
+
+La base PostgreSQL/PostGIS peut tourner dans Docker, mais ses donnees ne doivent
+pas etre traitees comme le conteneur backend.
+
+Dans les fichiers Compose actuels, PostgreSQL utilise un volume Docker:
+
+```text
+postgis_data:/var/lib/postgresql/data
+```
+
+Cela signifie:
+
+- redeployer le backend ne supprime pas les donnees;
+- reconstruire l'image backend ne supprime pas les donnees;
+- supprimer le conteneur `backend` ne supprime pas les donnees;
+- supprimer le volume `postgis_data` supprime les donnees;
+- lancer `docker compose down -v` supprime les volumes de la stack.
+
+Regle importante:
+
+```text
+Ne jamais supprimer le volume PostgreSQL sans backup verifie.
+```
+
+Pour staging, une DB dans Docker avec volume persistant est acceptable si on a
+des backups. Pour production, il faudra choisir une approche plus robuste:
+
+- PostgreSQL/PostGIS dans une stack Portainer separee;
+- PostgreSQL/PostGIS sur un serveur dedie;
+- base managée compatible PostGIS;
+- backups automatiques planifies et testes.
+
+Le backend doit rester jetable. La base de donnees ne doit pas l'etre.
+
+## Swagger et OpenAPI pour le frontend
+
+FastAPI expose deux outils utiles:
+
+```text
+/docs
+/openapi.json
+```
+
+`/docs` sert a tester manuellement les endpoints depuis Swagger UI.
+
+`/openapi.json` sert de contrat technique pour le frontend. Le frontend peut
+generer des types TypeScript ou un client API a partir de cette URL.
+
+Exemple:
+
+```text
+npx openapi-typescript http://abidjanmaps-backend-staging.diddifree.com/openapi.json -o src/api/schema.ts
+```
+
+Avec Orval:
+
+```text
+npx orval --input http://abidjanmaps-backend-staging.diddifree.com/openapi.json --output src/api/generated
+```
+
+Cela reduit les erreurs de payload, de reponse et de coordonnees `lat/lng`.
+
 ## Donnees OSRM
 
 Les fichiers OSRM sont volumineux et ne sont pas suivis dans GitHub.
@@ -181,6 +244,8 @@ Avant de deployer:
 - verifier que `OSRM_DATA_PATH` existe sur le VPS;
 - verifier que les fichiers OSRM sont presents;
 - verifier que `AUTH_SECRET_KEY` n'est pas la valeur dev;
+- verifier que le volume PostgreSQL attendu existe ou qu'un backup existe;
+- ne jamais redeployer avec une commande qui supprime les volumes sans decision explicite;
 - verifier les logs `backend`, `db` et `osrm`;
 - tester `GET /api/v1/health`;
 - tester `GET /docs` seulement si l'environnement doit exposer la doc.

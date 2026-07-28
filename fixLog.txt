@@ -237,3 +237,298 @@ Pourquoi: Une donnee locale sans coordonnees est lisible dans une table, mais pa
 Changement: Assouplissement du script check_phase2_scenarios et ajout de TESTING_GUIDE.md.
 Effet: Le script verifie maintenant que la meilleure proposition de chaque profil est eligible, sans imposer que toutes les alternatives moto le soient. TESTING_GUIDE.md clarifie les tests automatiques, les tests staging et les tests domaine.
 Pourquoi: Les alternatives OSRM peuvent varier entre local et VPS. Le test doit valider la regle metier importante: detecter les incompatibilites et classer une route eligible en premier.
+
+2026-07-27 14:30:32
+Changement: Ajout du script scripts.check_staging_public_api.
+Effet: On peut maintenant verifier rapidement depuis le conteneur backend que le domaine public staging expose health, db-health, roads, places, route-reports et routes/proposals/detail.
+Pourquoi: check_phase2_scenarios valide surtout le scoring. Il fallait aussi un controle simple des endpoints que le frontend va consommer sur staging.
+
+2026-07-27 14:40:09
+Changement: Demarrage de la Phase 3 avec le module vertical journeys et la migration Alembic 20260727_0005.
+Effet: Un utilisateur authentifie peut demarrer un trajet, envoyer des positions GPS, terminer le trajet, puis relire la trace. Les points sont stockes en PostGIS POINT et le backend calcule une premiere distance/duree reelle.
+Pourquoi: La Phase 3 doit commencer par collecter proprement les donnees terrain avant de chercher a modifier automatiquement le graphe ou le scoring.
+2026-07-27 15:05:07 - Documentation Phase 3 GPS
+
+Ajout de `PHASE3_GPS_ANALYSIS.md` pour expliquer ce qu'est une trace GPS, ce
+qu'on peut en extraire, et pourquoi on doit d'abord analyser/valider les traces
+avant de modifier le Map Core.
+
+Ajout de `FRONTEND_PHASE3_BRIEF.md` pour donner au developpeur frontend les use
+cases Phase 3: demarrer une collecte, envoyer les positions GPS par batch,
+terminer un trajet, afficher la trace reelle, puis se preparer a l'analyse GPS.
+
+Mise a jour de `FRONTEND_BRIEFING.md`, `PHASE_STATUS.md`, `README.md` et
+`TESTING_GUIDE.md` pour relier les nouveaux documents au reste du projet.
+
+2026-07-27 15:05:07 - Analyse GPS Phase 3 V2
+
+Ajout du stockage `journey_analyses` pour garder le resume d'analyse d'un trajet
+GPS termine. Le backend peut maintenant calculer un score de qualite, une
+distance exploitable, une duree, une vitesse moyenne backend, une vitesse moyenne
+issue du telephone si disponible, les ecarts avec OSRM et des evenements simples
+comme trace courte, mauvaise precision GPS, trajet beaucoup plus long que prevu
+ou vitesse moyenne faible.
+
+Ajout des endpoints `POST /api/v1/journeys/{journey_id}/analyze` et
+`GET /api/v1/journeys/{journey_id}/analysis`. L'analyse ne modifie pas encore
+les tables `roads` ou `route_reports`; elle produit seulement une observation
+stockee pour preparer une validation metier plus tard.
+
+La vitesse principale est calculee cote backend avec la distance entre deux
+points GPS divisee par le temps entre ces deux points. Le champ `speed_mps`
+envoye par le telephone reste une comparaison secondaire car il peut etre absent
+ou bruite.
+
+2026-07-27 15:24:46 - Documentation persistance DB et OpenAPI frontend
+
+Ajout d'une section deploiement sur la protection des donnees PostgreSQL/PostGIS.
+Le backend peut etre recree, mais les donnees vivent dans le volume Docker
+`postgis_data`. Il ne faut donc jamais supprimer ce volume ou utiliser
+`docker compose down -v` sans backup verifie.
+
+Ajout d'une section Swagger/OpenAPI pour expliquer au frontend comment utiliser
+`/docs` pour explorer l'API et `/openapi.json` pour generer des types TypeScript
+ou un client API. Cela limite les erreurs de payload, de reponse et de
+coordonnees.
+
+2026-07-27 15:24:46 - Script de verification Phase 3 journeys
+
+Ajout de `scripts.check_phase3_journeys`. Ce script teste un workflow API complet:
+connexion avec un utilisateur existant, demarrage d'un trajet, envoi de positions
+GPS, cloture du trajet, lecture du detail, analyse GPS et lecture de l'analyse
+stockee. Il utilise les variables `PHASE3_TEST_EMAIL` et `PHASE3_TEST_PASSWORD`
+pour eviter de coder un compte en dur.
+
+2026-07-27 15:48:57 - Compatibilite Windows CMD pour check Phase 3
+
+Correction du script `scripts.check_phase3_journeys` pour retirer les guillemets
+accidentels autour des variables d'environnement. En Terminal Windows/CMD, une
+commande comme `set BACKEND_BASE_URL="http://127.0.0.1:8000"` peut stocker les
+guillemets dans la valeur, ce qui cassait httpx avec une URL qui ne commence plus
+directement par `http://`.
+
+Mise a jour de la documentation pour utiliser la forme CMD recommandee:
+`set "NOM_VARIABLE=valeur"`. Cette forme evite que les guillemets deviennent une
+partie de la valeur.
+
+2026-07-27 15:48:57 - Migration Alembic automatique en developpement
+
+Mise a jour de `docker-compose.override.yaml` pour lancer
+`alembic upgrade head` avant `uvicorn --reload`. En developpement, l'override
+remplacait la commande du backend et pouvait donc demarrer FastAPI sans appliquer
+la derniere migration. Cela expliquait l'erreur `relation "journey_analyses" does
+not exist` apres l'ajout de la migration Phase 3 V2.
+
+La commande de secours documentee est:
+`docker compose exec backend alembic upgrade head`.
+
+2026-07-27 16:20:10 - Frontiere Map Core / DiddiGo pour la collecte GPS
+
+Renommage du vocabulaire public de la collecte GPS Phase 3 vers `map-traces`.
+Les nouveaux endpoints officiels sont maintenant `/api/v1/map-traces/...`.
+Les anciens endpoints `/api/v1/journeys/...` restent disponibles mais caches de
+Swagger pour compatibilite temporaire.
+
+Le but est de garder cette fonctionnalite dans le domaine Map Core: collecte et
+analyse de traces GPS pour ameliorer la carte. On evite ainsi de melanger avec
+DiddiGo, qui gerera plus tard les courses, chauffeurs, passagers, dispatch,
+paiement et suivi temps reel client.
+
+2026-07-27 16:34:05 - Insights Map Core issus des traces GPS
+
+Ajout de la table `map_trace_insights` et de la migration Alembic
+`20260727_0007`. Quand une trace GPS est analysee, les evenements detectes sont
+transformes en insights `proposed`, c'est-a-dire des observations a revoir.
+
+Ajout des endpoints admin `GET /api/v1/map-trace-insights`,
+`GET /api/v1/map-trace-insights/{id}`,
+`POST /api/v1/map-trace-insights/{id}/validate` et
+`POST /api/v1/map-trace-insights/{id}/reject`.
+
+Ces insights ne modifient pas encore `roads`, `route_reports` ou le scoring.
+Ils servent de sas de validation entre l'analyse GPS automatique et les futures
+decisions cartographiques.
+
+2026-07-27 16:34:05 - Nettoyage du contrat public trace_id
+
+Remplacement de `journey_id` par `trace_id` dans les schemas publics de lecture
+des positions GPS, des analyses et de la sortie du script
+`check_phase3_map_traces`. Les noms internes et les tables DB gardent encore
+`journey` volontairement, car la migration de renommage DB est reportee.
+
+Ajout de filtres sur `GET /api/v1/map-trace-insights`: `status`,
+`insight_type`, `severity_min` et `trace_id`. Ajout aussi de
+`GET /api/v1/map-trace-insights/{id}/detail` pour retourner dans une seule
+reponse l'insight, la trace et l'analyse associee.
+
+2026-07-27 16:34:05 - Conversion controlee insight vers route_report
+
+Ajout de `POST /api/v1/map-trace-insights/{id}/convert-to-route-report`.
+L'endpoint exige un insight `validated`, puis cree un `route_report` en statut
+`proposed`. Le report garde dans `extra_metadata` le lien vers l'insight, la
+trace et l'analyse source.
+
+La conversion ne valide pas le `route_report`; il doit encore passer par le
+workflow normal de validation avant d'influencer le scoring.
+
+2026-07-27 18:03:12 - Clarification OSRM driving et futur profil pieton
+
+Ajout d'une note dans README.md, PHASE_STATUS.md et FRONTEND_PHASE3_BRIEF.md
+pour clarifier que `osrm:5000` utilise actuellement le profil OSRM `driving`.
+Les profils API `car`, `motorcycle` et `truck` restent des profils metier du
+backend: ils influencent le prix, les contraintes et le scoring, mais utilisent
+encore le meme moteur OSRM driving.
+
+Le profil pieton/walking est note comme sujet futur. Il ne doit pas etre expose
+au frontend avant d'avoir prepare des fichiers OSRM dedies et probablement un
+service `osrm-walking`.
+
+2026-07-27 18:07:45 - Enrichissement qualite des analyses GPS
+
+Ajout de la migration Alembic `20260727_0008` pour stocker cinq nouveaux champs
+dans `journey_analyses`: `moving_time_s`, `stopped_time_s`, `max_speed_kmh`,
+`gps_gap_count` et `suspicious_jump_count`.
+
+Le backend calcule maintenant le temps en mouvement, le temps a l'arret, la
+vitesse maximale credible, les gros trous entre deux points GPS et les sauts GPS
+improbables. Les sauts improbables sont filtres pour ne pas fausser la distance
+et la vitesse moyenne.
+
+Ces champs aident l'admin et le frontend a comprendre si une trace est fiable
+avant de transformer un insight GPS en enrichissement Map Core.
+
+2026-07-27 18:15:22 - Detection metier avancee des traces GPS
+
+Ajout de nouveaux types d'evenements dans l'analyse GPS: `possible_slow_segment`,
+`possible_blocked_road` et `possible_detour`. Ces evenements deviennent ensuite
+des `map_trace_insights` proposes, comme les autres observations GPS.
+
+`possible_slow_segment` signale une portion lente, `possible_blocked_road`
+signale une route potentiellement bloquee ou tres difficile, et
+`possible_detour` signale une trace reelle beaucoup plus longue que la route
+prevue.
+
+Ajout de tests pour verifier les trous GPS, les sauts GPS, les segments lents,
+les routes possiblement bloquees et les detours. `possible_detour` peut etre
+converti en `route_report` de type `degraded` apres validation admin.
+
+2026-07-27 18:18:09 - Anti-doublons pour les insights Map Core
+
+Ajout de la migration Alembic `20260727_0009` avec le champ `duplicate_key` sur
+`map_trace_insights`. Cette cle combine le type d'insight et une zone
+approximative de la trace. Exemple: `possible_slow_segment:-4.017:5.330`.
+
+Le repository filtre maintenant les nouveaux insights avant insertion: si un
+insight `proposed` ou `validated` existe deja avec la meme `duplicate_key`, le
+backend ne repropose pas le meme probleme. Un insight `rejected` ne bloque pas
+une future proposition, car plusieurs traces futures peuvent apporter une
+nouvelle preuve.
+
+Ajout d'un index unique partiel en base pour proteger aussi le staging et la
+production contre les doublons concurrents. Le script `check_phase3_map_traces`
+decale legerement sa trace de test a chaque execution pour rester repetable
+malgre cette protection anti-doublons.
+
+2026-07-27 18:42:50 - Confirmations terrain pour insights Map Core
+
+Ajout de `evidence_count` et `latest_evidence_trace_id` sur les
+`map_trace_insights`.
+
+Pourquoi: un meme probleme detecte au meme endroit ne doit pas toujours etre
+supprime comme un doublon. Si c'est la meme trace ou la meme analyse, c'est un
+doublon technique. Si c'est une autre trace qui confirme le meme probleme dans
+la meme zone, c'est une preuve terrain supplementaire.
+
+Effet: le backend garde un seul insight actif par `duplicate_key`, mais augmente
+`evidence_count` quand une trace differente confirme le signal. Cela prepare une
+revue admin plus fiable sans encore faire confiance aveuglement aux traces GPS.
+
+2026-07-27 18:53:14 - File de revue admin des insights Map Core
+
+Ajout du tri sur `GET /api/v1/map-trace-insights` avec `sort` et `order`.
+Valeurs de tri: `priority`, `severity`, `evidence`, `confidence` et `newest`.
+
+Ajout de `GET /api/v1/map-trace-insights/review-queue`. Cette route renvoie les
+insights les plus urgents a traiter, avec `review_priority_score`,
+`recommended_action` et `conversion_ready`.
+
+Ajout de `GET /api/v1/map-trace-insights/route-report-candidates`. Cette route
+liste les insights deja valides, convertibles et assez solides pour proposer la
+creation d'un `route_report`. Elle ne convertit rien toute seule: l'admin garde
+le controle avec l'endpoint existant `convert-to-route-report`.
+
+Pourquoi: on veut aider l'admin a travailler vite sans automatiser trop tot la
+modification du Map Core. Le backend recommande, l'humain valide.
+
+2026-07-27 19:35:48 - Script unique de validation staging
+
+Ajout de `scripts.validate_staging`.
+
+Ce script facilite la validation staging avec deux modes:
+
+- `VALIDATE_STAGING_MODE=public`: teste seulement les endpoints publics comme
+  health, db-health, roads, places, route_reports et propositions de routes;
+- `VALIDATE_STAGING_MODE=full`: teste aussi le login, la collecte Map Trace,
+  l'analyse GPS, les insights, la revue admin et la conversion en
+  `route_report proposed`.
+
+Le script retourne un JSON clair avec `status`, `mode`, `base_url`, chaque check
+execute, sa duree et l'erreur lisible si quelque chose casse. Il peut etre lance
+depuis le Terminal Windows contre l'URL staging ou directement dans le conteneur
+backend sur le VPS/Portainer.
+
+Pourquoi: une validation par simple lien URL ne suffit pas pour les workflows
+qui creent des donnees et demandent une authentification. Le script donne donc
+un controle reproductible sans exposer un endpoint public dangereux.
+
+2026-07-27 20:30:22 - Correction validation staging places et insights deja confirmes
+
+Correction de `/api/v1/places`: quand les places viennent de PostgreSQL/PostGIS,
+`location` n'est pas un dict Python mais un objet geometrique SQLAlchemy. Le
+backend utilise maintenant `ST_AsGeoJSON` dans ce cas pour convertir la position
+avant de retourner `{lng, lat}`. Le bug ne se voyait pas en local quand la table
+`places` etait vide, mais il cassait en staging avec de vraies lignes.
+
+Correction de `scripts.check_phase3_map_traces`: le script accepte maintenant le
+cas normal ou une nouvelle trace ne cree pas un nouvel insight parce qu'elle
+confirme un insight actif existant via `latest_evidence_trace_id` et
+`evidence_count`.
+
+Effet: la validation staging devient compatible avec les donnees deja presentes
+et avec la logique anti-doublons/confirmation terrain de Phase 3.
+
+2026-07-28 12:48:52 - Import OSM de base et geocodage local
+
+Ajout de `scripts.import_osm_base` pour importer depuis le fichier
+`ivory-coast-latest.osm.pbf` deja utilise par OSRM.
+
+Le script extrait les routes OSM nommees vers `roads` et les POI/places OSM
+nommes vers `places`. Par defaut, il limite l'import a une bbox autour
+d'Abidjan pour eviter d'importer toute la Cote d'Ivoire trop tot. Chaque ligne
+garde son origine avec `extra_metadata.source = "osm"` ainsi que
+`osm_type/osm_id`, ce qui rend l'import relancable sans creer de doublons.
+
+Ajout de `GET /api/v1/roads/search?q=...` pour rechercher des rues/routes.
+
+Ajout de `GET /api/v1/geocoding/search?q=...` comme endpoint recommande pour le
+frontend. Il cherche a la fois dans `places` et `roads`, puis retourne un label,
+un type et une coordonnee utilisable pour le calcul OSRM.
+
+Le dossier OSRM est maintenant monte en lecture seule dans le conteneur backend
+pour que le script puisse lire `/data/osrm/ivory-coast-latest.osm.pbf`.
+
+Pourquoi: OSM donne une bonne base de noms, mais Diddi doit ensuite enrichir
+avec les noms locaux, aliases, carrefours populaires et validations terrain.
+
+2026-07-28 13:11:29 - Correction dependance native osmium dans Docker
+
+Le package Python `osmium` etait bien installe dans le conteneur, mais il ne
+pouvait pas demarrer car l'image `python:3.12-slim` ne contenait pas la librairie
+systeme `libexpat.so.1`.
+
+Ajout de `libexpat1` dans `backend/Dockerfile` avant l'installation des
+dependances Python.
+
+Pourquoi: certains packages Python ont une partie native en C/C++. `pip freeze`
+peut donc montrer le package comme installe, mais l'import Python peut echouer si
+une librairie Linux attendue par ce package manque dans l'image Docker.

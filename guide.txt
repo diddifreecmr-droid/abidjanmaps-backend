@@ -188,12 +188,60 @@ GUIDE RAPIDE DE LA NOUVELLE ARCHITECTURE
 - backend/scripts/check_phase2_scenarios.py
   Lance les scenarios voiture, moto et camion contre le vrai backend.
 
+- backend/scripts/check_staging_public_api.py
+  Verifie rapidement les endpoints publics consommes par le frontend sur staging.
+
+- backend/scripts/check_phase3_map_traces.py
+  Verifie un workflow Phase 3 Map Core complet contre une vraie API: login,
+  demarrage trace GPS, positions GPS, finish, analyse et lecture de l'analyse.
+
+- backend/scripts/check_phase3_journeys.py
+  Alias temporaire vers check_phase3_map_traces pour compatibilite.
+
+- backend/app/modules/journeys/
+  Module Phase 3 V1 pour enregistrer les traces GPS Map Core et leurs positions.
+
+- backend/app/modules/journeys/domain/entities/journey.py
+  Entites Journey, JourneyPosition, JourneyDetail et JourneyAnalysis.
+
+- backend/app/modules/journeys/application/use_cases/manage_journeys.py
+  Orchestre demarrage, ajout de positions, cloture, calcul distance/duree reelle
+  et analyse GPS simple des traces Map Core terminees.
+
+- backend/app/modules/journeys/infrastructure/persistence/models.py
+  Modeles ORM journeys, journey_positions et journey_analyses. Les positions GPS
+  restent en PostGIS POINT; les resumes d'analyse sont stockes en colonnes simples
+  et JSONB pour les evenements detectes. Les insights Map Core sont stockes dans
+  map_trace_insights pour la revue admin.
+
+- backend/app/modules/journeys/presentation/api.py
+  Endpoints officiels /map-traces/start, /map-traces/{id}/positions,
+  /map-traces/{id}/finish, /map-traces/{id}, /map-traces,
+  /map-traces/{id}/analyze et /map-traces/{id}/analysis.
+  Expose aussi /map-trace-insights pour la revue admin des observations GPS.
+  La conversion /map-trace-insights/{id}/convert-to-route-report cree un
+  route_report proposed a partir d'un insight validated.
+  Les anciens endpoints /journeys restent caches dans Swagger pour compatibilite.
+
+- backend/tests/test_journeys.py
+  Verifie le workflow de collecte GPS Phase 3 V1 et l'analyse GPS Phase 3 V2.
+
+- backend/alembic/versions/20260727_0006_journey_analysis.py
+  Migration qui ajoute la table journey_analyses pour stocker le resume d'analyse
+  d'un trajet GPS termine.
+
+- backend/alembic/versions/20260727_0007_map_trace_insights.py
+  Migration qui ajoute la table map_trace_insights pour stocker les observations
+  GPS proposees a la revue admin.
+
 Commandes principales:
 
 - pytest
 - RUN_POSTGIS_INTEGRATION=1 pytest tests/integration/test_patch_workflow_postgis.py
 - docker compose exec backend python -m scripts.seed_phase2
 - docker compose exec backend python -m scripts.check_phase2_scenarios
+- docker compose exec backend python -m scripts.check_staging_public_api
+- docker compose exec backend python -m scripts.check_phase3_map_traces
 - docker compose exec backend python -m scripts.create_user --email admin@example.com --role admin
 - docker compose run --rm init-db alembic check
 - docker compose up -d --build

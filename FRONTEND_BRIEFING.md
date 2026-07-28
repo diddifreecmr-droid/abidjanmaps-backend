@@ -1,8 +1,16 @@
-# AbidjanMaps - Briefing frontend Phase 1 et Phase 2
+# AbidjanMaps - Briefing frontend Phase 1, Phase 2 et Phase 3
 
 Ce document explique au developpeur frontend ce que le backend permet deja de
 faire, comment l'API fonctionne, et quels ecrans/use cases devraient exister
-cote interface utilisateur pour couvrir les phases 1 et 2.
+cote interface utilisateur pour couvrir les phases 1, 2 et 3.
+
+Pour le detail complet de la collecte GPS et de l'analyse des traces, consulter
+aussi:
+
+```text
+FRONTEND_PHASE3_BRIEF.md
+PHASE3_GPS_ANALYSIS.md
+```
 
 ## Base API
 
@@ -47,7 +55,43 @@ Le backend sait deja:
 - gerer un workflow de validation `proposed / validated / rejected`;
 - historiser les changements;
 - authentifier des utilisateurs avec JWT;
-- proteger les actions d'ecriture et d'administration.
+- proteger les actions d'ecriture et d'administration;
+- collecter des traces GPS Map Core avec les endpoints `map-traces`.
+
+## Swagger et contrat OpenAPI
+
+Le frontend peut utiliser Swagger pour comprendre et tester les endpoints:
+
+```text
+http://abidjanmaps-backend-staging.diddifree.com/docs
+```
+
+Le contrat machine-readable est:
+
+```text
+http://abidjanmaps-backend-staging.diddifree.com/openapi.json
+```
+
+Ce fichier peut servir a generer les types TypeScript ou un client API.
+
+Exemple simple:
+
+```text
+npx openapi-typescript http://abidjanmaps-backend-staging.diddifree.com/openapi.json -o src/api/schema.ts
+```
+
+Exemple avec Orval:
+
+```text
+npx orval --input http://abidjanmaps-backend-staging.diddifree.com/openapi.json --output src/api/generated
+```
+
+Recommandation:
+
+- utiliser Swagger pour explorer;
+- utiliser `openapi.json` pour typer le code frontend;
+- ne pas recopier les payloads a la main si un client genere peut le faire;
+- garder une variable `API_BASE_URL` par environnement.
 
 ## Authentification
 
@@ -626,6 +670,50 @@ Use case frontend Phase 1/2:
 - autocompletion locale;
 - recherche par nom, alias ou nom vernaculaire selon repository.
 
+## Geocodage local: depart / destination
+
+Endpoint recommande pour le frontend:
+
+```http
+GET /api/v1/geocoding/search?q=anador
+```
+
+Cet endpoint cherche dans les donnees locales importees/enrichies:
+
+- `places`: lieux, POI, carrefours, gares, marches, points connus;
+- `roads`: rues/routes nommees.
+
+Exemple de reponse:
+
+```json
+[
+  {
+    "type": "place",
+    "id": 2,
+    "label": "Carrefour Anador",
+    "category": "landmark",
+    "location": {"lng": -4.0, "lat": 5.3},
+    "source": "osm"
+  },
+  {
+    "type": "road",
+    "id": 9,
+    "label": "Boulevard Latrille",
+    "category": "road",
+    "location": {"lng": -3.99, "lat": 5.34},
+    "source": "osm"
+  }
+]
+```
+
+Use case frontend:
+
+- utiliser cette route pour les champs depart et destination;
+- afficher `label`;
+- envoyer `location.lng` et `location.lat` a l'endpoint de calcul d'itineraire;
+- afficher `type` pour distinguer une rue d'un lieu;
+- garder `places/search` et `roads/search` comme endpoints specialises.
+
 ### Creer une place
 
 ```http
@@ -954,3 +1042,140 @@ Le frontend est responsable de:
 - aider l'utilisateur a contribuer;
 - aider l'admin a moderer;
 - gerer proprement les erreurs API.
+
+## Phase 3 V1 - Collecte GPS Map Core
+
+La Phase 3 commence avec la collecte de trajets reels. Ce n'est pas encore une
+course VTC complete: le but est d'enregistrer des traces GPS exploitables plus
+tard pour enrichir le Map Core.
+
+Tous les endpoints `map-traces` demandent:
+
+```text
+Authorization: Bearer <token>
+```
+
+### Demarrer un trajet
+
+```http
+POST /api/v1/map-traces/start
+```
+
+Payload:
+
+```json
+{
+  "start": {
+    "lng": -4.02,
+    "lat": 5.33
+  },
+  "end": {
+    "lng": -3.99,
+    "lat": 5.34
+  },
+  "profile": "car",
+  "planned_distance_m": 1450,
+  "planned_duration_s": 360,
+  "planned_route_geometry": {
+    "type": "LineString",
+    "coordinates": [
+      [-4.02, 5.33],
+      [-3.99, 5.34]
+    ]
+  }
+}
+```
+
+### Envoyer des positions GPS
+
+```http
+POST /api/v1/map-traces/{trace_id}/positions
+```
+
+Payload:
+
+```json
+{
+  "positions": [
+    {
+      "lng": -4.019,
+      "lat": 5.331,
+      "accuracy_m": 8,
+      "speed_mps": 6.2,
+      "recorded_at": "2026-07-27T10:01:00Z"
+    }
+  ]
+}
+```
+
+### Terminer un trajet
+
+```http
+POST /api/v1/map-traces/{trace_id}/finish
+```
+
+Payload:
+
+```json
+{
+  "finished_at": "2026-07-27T10:15:00Z"
+}
+```
+
+Le backend retourne ensuite:
+
+```json
+{
+  "status": "finished",
+  "actual_distance_m": 1200.5,
+  "actual_duration_s": 900
+}
+```
+
+Use cases frontend Phase 3 V1:
+
+- bouton "Demarrer collecte";
+- envoi periodique de positions GPS;
+- bouton "Terminer collecte";
+- affichage statut du trajet;
+- affichage distance reelle et duree reelle;
+- page detail d'une trace;
+- liste des traces collectees par l'utilisateur.
+
+## Phase 3 V2 - Analyse des traces GPS
+
+Une trace GPS est une suite de positions envoyees pendant un trajet. Le backend
+doit ensuite transformer ces points bruts en informations utiles:
+
+- qualite de la trace;
+- distance reelle;
+- duree reelle;
+- vitesse moyenne;
+- ecart avec la route OSRM prevue;
+- detection de zones lentes;
+- detection de detours;
+- suggestions terrain a valider.
+
+Le frontend doit se preparer a afficher:
+
+- un score qualite;
+- une comparaison `prevu / reel`;
+- des badges `Trace bonne`, `Trace faible`, `A verifier`;
+- une carte avec route prevue et trace reelle;
+- les evenements detectes par le backend.
+
+Endpoints probables a venir:
+
+```text
+POST /api/v1/map-traces/{trace_id}/analyze
+GET  /api/v1/map-traces/{trace_id}/analysis
+```
+
+La regle produit importante:
+
+```text
+Une trace GPS ne modifie pas automatiquement le Map Core.
+```
+
+Elle sert d'abord a produire une observation. Plus tard, cette observation pourra
+devenir une suggestion, puis une donnee validee par un admin.
