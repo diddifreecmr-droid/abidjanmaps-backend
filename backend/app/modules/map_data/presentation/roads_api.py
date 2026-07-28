@@ -1,6 +1,6 @@
 import json
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -107,6 +107,17 @@ async def create_road(
 async def list_roads(session: AsyncSession = Depends(get_async_session)) -> list[dict]:
     repo = SQLAlchemyRoadRepository(session)
     roads = await repo.list_all()
+    return [await _road_response(road, session) for road in roads]
+
+
+@router.get("/roads/search")
+async def search_roads(
+    q: str = Query(min_length=1),
+    limit: int = Query(default=20, ge=1, le=100),
+    session: AsyncSession = Depends(get_async_session),
+) -> list[dict]:
+    repo = SQLAlchemyRoadRepository(session)
+    roads = await repo.search(q, limit=limit)
     return [await _road_response(road, session) for road in roads]
 
 
