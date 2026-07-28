@@ -13,8 +13,11 @@ from app.shared.infrastructure.db import async_session_factory
 
 try:
     import osmium
-except ImportError:  # pragma: no cover - exercised only when dependency is missing.
+except ImportError as exc:  # pragma: no cover - exercised only when dependency is missing.
     osmium = None
+    OSMIUM_IMPORT_ERROR = exc
+else:
+    OSMIUM_IMPORT_ERROR = None
 
 OsmiumSimpleHandler = osmium.SimpleHandler if osmium is not None else object
 
@@ -410,7 +413,9 @@ async def _insert_places(places: list[ImportedPlace], *, batch_size: int) -> dic
 async def import_osm_base() -> dict[str, Any]:
     if osmium is None:
         raise RuntimeError(
-            "Missing dependency 'osmium'. Rebuild/reinstall backend dependencies first."
+            "Unable to import dependency 'osmium'. "
+            "If `pip freeze` shows osmium, the package may be installed but one of "
+            f"its native libraries failed to load. Original error: {OSMIUM_IMPORT_ERROR!r}"
         )
 
     pbf_path = Path(_env_value("OSM_IMPORT_PBF_PATH") or _default_pbf_path())
