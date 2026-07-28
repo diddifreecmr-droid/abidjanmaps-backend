@@ -151,6 +151,15 @@ et que les contraintes vehicule sont bien detectees. Il ne force pas toutes les
 alternatives a etre eligibles, car les alternatives OSRM peuvent varier entre
 local et staging.
 
+Commande de verification publique staging:
+
+```text
+python -m scripts.check_staging_public_api
+```
+
+Ce script controle les endpoints publics principaux que le frontend doit pouvoir
+consommer.
+
 ## Phase 3 - Vraies donnees terrain
 
 La Phase 3 ne doit pas etre confondue avec la Phase 2.
@@ -161,7 +170,8 @@ La Phase 3 commence quand on alimente le systeme avec de vraies donnees terrain.
 Objectifs Phase 3:
 
 - collecter des traces GPS reelles;
-- enregistrer les journeys de test;
+- enregistrer les traces GPS terrain de test;
+- importer une base OSM exploitable pour les noms de routes et de lieux;
 - importer ou saisir un volume plus important de roads;
 - importer ou saisir plus de places locales;
 - faire remonter les signalements terrain;
@@ -175,7 +185,7 @@ Objectifs Phase 3:
 Modules probables Phase 3:
 
 ```text
-journeys
+map_traces
 gps_traces
 data_quality
 field_collection
@@ -200,6 +210,23 @@ Ce qu'il ne faut pas encore faire trop vite:
 - recalculer le score de tous les troncons en temps reel;
 - construire un moteur GPS avance avant d'avoir des donnees;
 - automatiser OSRM pour la production sans stabiliser la methode de livraison.
+- ajouter un profil pieton public avant d'avoir prepare un vrai moteur OSRM
+  walking.
+
+Decision OSRM actuelle:
+
+```text
+Le service osrm:5000 utilise les fichiers Cote d'Ivoire prepares pour le profil
+driving. Les profils API car, motorcycle et truck restent des profils metier
+backend, mais ils utilisent tous ce moteur OSRM driving pour le calcul de base.
+```
+
+Sujet futur:
+
+```text
+Ajouter un profil walking/pedestrian avec des fichiers OSRM separes et un
+service OSRM dedie, par exemple osrm-walking.
+```
 
 Sujet important a traiter avant production:
 
@@ -215,3 +242,175 @@ Options possibles:
 
 Pour le moment, la manipulation OSRM peut rester manuelle en staging, mais elle
 devra etre automatisee avant production.
+
+## Phase 3 V1 - Map Traces
+
+Statut backend:
+
+```text
+Demarre
+```
+
+Ce qui est disponible:
+
+- module vertical `journeys` avec API publique `map-traces`;
+- table `journeys`;
+- table `journey_positions`;
+- stockage PostGIS des points GPS;
+- demarrage d'un trajet de collecte;
+- ajout de positions GPS par batch;
+- cloture d'un trajet;
+- calcul simple de distance reelle;
+- calcul simple de duree reelle;
+- lecture d'un trajet et de ses positions;
+- liste des trajets de l'utilisateur connecte;
+- migration Alembic `20260727_0005`.
+
+Endpoints officiels Phase 3 V1:
+
+```text
+POST /api/v1/map-traces/start
+POST /api/v1/map-traces/{trace_id}/positions
+POST /api/v1/map-traces/{trace_id}/finish
+GET  /api/v1/map-traces/{trace_id}
+GET  /api/v1/map-traces
+```
+
+Regles:
+
+- tous les endpoints `map-traces` demandent un token Bearer;
+- une trace appartient a l'utilisateur connecte;
+- le frontend ne choisit pas `user_id`;
+- une trace `finished` ne peut plus recevoir de positions;
+- l'analyse automatique des traces n'est pas encore activee.
+
+Definition of Done Phase 3 V1:
+
+- un utilisateur connecte peut demarrer un trajet;
+- il peut envoyer plusieurs positions GPS;
+- il peut terminer le trajet;
+- le backend renvoie une distance reelle et une duree reelle;
+- le trajet peut etre relu avec ses positions;
+- les migrations passent en local et staging.
+- le script `check_phase3_map_traces` passe sur local et staging.
+
+## Phase 3 V2 - Analyse des traces GPS
+
+Statut backend:
+
+```text
+Implementation V1 disponible
+```
+
+Objectif:
+
+- analyser les traces Map Core terminees;
+- produire un resume technique et metier;
+- calculer un score de qualite;
+- comparer distance/duree prevues avec distance/duree reelles;
+- detecter des signaux simples comme zone lente ou detour;
+- preparer des suggestions terrain sans modifier automatiquement le scoring;
+- generer des insights Map Core `proposed` pour revue admin.
+- detecter des candidats `possible_slow_segment`, `possible_blocked_road` et
+  `possible_detour`.
+- limiter les doublons d'insights actifs avec une `duplicate_key`.
+- compter les confirmations terrain avec `evidence_count`: meme trace =
+  doublon technique ignore, autre trace meme zone = preuve supplementaire.
+
+Endpoints probables:
+
+```text
+POST /api/v1/map-traces/{trace_id}/analyze
+GET  /api/v1/map-traces/{trace_id}/analysis
+```
+
+Stockage:
+
+```text
+journey_analyses
+map_trace_insights
+```
+
+La vitesse moyenne principale est calculee par le backend avec la distance entre
+points GPS divisee par le temps entre points. Le champ `speed_mps` du telephone
+est conserve comme comparaison secondaire.
+
+Documents ajoutes:
+
+```text
+PHASE3_GPS_ANALYSIS.md
+FRONTEND_PHASE3_BRIEF.md
+```
+
+Script de verification:
+
+```text
+python -m scripts.check_phase3_map_traces
+```
+
+Endpoints de revue admin:
+
+```text
+GET  /api/v1/map-trace-insights
+GET  /api/v1/map-trace-insights/review-queue
+GET  /api/v1/map-trace-insights/route-report-candidates
+GET  /api/v1/map-trace-insights/{insight_id}
+GET  /api/v1/map-trace-insights/{insight_id}/detail
+POST /api/v1/map-trace-insights/{insight_id}/validate
+POST /api/v1/map-trace-insights/{insight_id}/reject
+POST /api/v1/map-trace-insights/{insight_id}/convert-to-route-report
+```
+
+Filtres de lecture:
+
+```text
+status
+insight_type
+severity_min
+trace_id
+sort
+order
+```
+
+Decision importante:
+
+```text
+Les traces GPS doivent d'abord etre analysees et validees humainement avant
+d'influencer roads, route_reports ou le score des alternatives.
+```
+
+Conversion controlee:
+
+```text
+insight validated -> route_report proposed
+```
+
+La route `/route-report-candidates` aide l'admin a trouver les insights valides
+qui ont assez de preuves pour etre convertis. Elle ne convertit rien toute seule.
+
+Le `route_report` cree doit encore etre valide separement avant d'influencer le
+scoring.
+
+## Base OSM et geocodage local
+
+Statut backend:
+
+```text
+Preparation disponible
+```
+
+Ce qui est ajoute:
+
+- script `python -m scripts.import_osm_base`;
+- import des routes OSM nommees vers `roads`;
+- import des POI/places OSM nommes vers `places`;
+- bbox Abidjan par defaut;
+- endpoint `GET /api/v1/roads/search?q=...`;
+- endpoint unifie `GET /api/v1/geocoding/search?q=...`.
+
+Decision importante:
+
+```text
+OSM sert de base initiale. Les donnees terrain Diddi restent une couche locale
+au-dessus, avec aliases, noms vernaculaires, validations et signalements.
+```

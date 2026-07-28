@@ -74,6 +74,9 @@ services:
     ports:
       - "8000:8000"
 
+    volumes:
+      - ./data/osrm:/data/osrm:ro
+
     depends_on:
       db:
         condition: service_healthy
