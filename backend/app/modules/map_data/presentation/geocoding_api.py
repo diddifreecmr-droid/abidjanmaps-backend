@@ -1,6 +1,6 @@
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.map_data.infrastructure.persistence.place_repository import (
@@ -33,14 +33,32 @@ def _line_representative_location(geometry: dict[str, Any] | None) -> dict | Non
 async def search_geocoding(
     q: str = Query(min_length=1),
     limit: int = Query(default=20, ge=1, le=100),
+    bias_lat: float | None = Query(default=None, ge=-90, le=90),
+    bias_lng: float | None = Query(default=None, ge=-180, le=180),
     session: AsyncSession = Depends(get_async_session),
 ) -> list[dict]:
+    if (bias_lat is None) != (bias_lng is None):
+        raise HTTPException(
+            status_code=400,
+            detail="bias_lat and bias_lng must be provided together",
+        )
+
     per_type_limit = max(limit, 1)
     place_repository = SQLAlchemyPlaceRepository(session)
     road_repository = SQLAlchemyRoadRepository(session)
 
-    places = (await place_repository.search(q))[:per_type_limit]
-    roads = await road_repository.search(q, limit=per_type_limit)
+    places = await place_repository.search(
+        q,
+        limit=per_type_limit,
+        bias_lat=bias_lat,
+        bias_lng=bias_lng,
+    )
+    roads = await road_repository.search(
+        q,
+        limit=per_type_limit,
+        bias_lat=bias_lat,
+        bias_lng=bias_lng,
+    )
 
     results: list[dict] = []
     for place in places:

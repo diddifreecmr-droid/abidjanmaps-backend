@@ -97,10 +97,24 @@ async def list_places(session: AsyncSession = Depends(get_async_session)) -> lis
 @router.get("/places/search")
 async def search_places(
     q: str = Query(min_length=1),
+    limit: int = Query(default=20, ge=1, le=100),
+    bias_lat: float | None = Query(default=None, ge=-90, le=90),
+    bias_lng: float | None = Query(default=None, ge=-180, le=180),
     session: AsyncSession = Depends(get_async_session),
 ) -> list[dict]:
+    if (bias_lat is None) != (bias_lng is None):
+        raise HTTPException(
+            status_code=400,
+            detail="bias_lat and bias_lng must be provided together",
+        )
+
     repo = SQLAlchemyPlaceRepository(session)
-    places = await repo.search(q)
+    places = await repo.search(
+        q,
+        limit=limit,
+        bias_lat=bias_lat,
+        bias_lng=bias_lng,
+    )
     return [await _place_response(place, session) for place in places]
 
 

@@ -167,6 +167,12 @@ GET /api/v1/places/search?q=Anador
 GET /api/v1/roads/search?q=Boulevard
 ```
 
+Pour classer les resultats proches de l'utilisateur en premier:
+
+```text
+GET /api/v1/geocoding/search?q=Anador&bias_lat=5.33&bias_lng=-4.02
+```
+
 Consulter `guide.txt` pour le detail fichier par fichier,
 `backend/ARCHITECTURE.md` pour les decisions d'architecture et
 `DEPLOYMENT.md` pour le workflow GitHub, Portainer et Nginx Proxy Manager.

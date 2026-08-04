@@ -114,10 +114,23 @@ async def list_roads(session: AsyncSession = Depends(get_async_session)) -> list
 async def search_roads(
     q: str = Query(min_length=1),
     limit: int = Query(default=20, ge=1, le=100),
+    bias_lat: float | None = Query(default=None, ge=-90, le=90),
+    bias_lng: float | None = Query(default=None, ge=-180, le=180),
     session: AsyncSession = Depends(get_async_session),
 ) -> list[dict]:
+    if (bias_lat is None) != (bias_lng is None):
+        raise HTTPException(
+            status_code=400,
+            detail="bias_lat and bias_lng must be provided together",
+        )
+
     repo = SQLAlchemyRoadRepository(session)
-    roads = await repo.search(q, limit=limit)
+    roads = await repo.search(
+        q,
+        limit=limit,
+        bias_lat=bias_lat,
+        bias_lng=bias_lng,
+    )
     return [await _road_response(road, session) for road in roads]
 
 

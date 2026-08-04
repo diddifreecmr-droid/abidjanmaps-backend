@@ -65,12 +65,24 @@ class SQLAlchemyRoadRepository(RoadRepository):
         result = await self.session.execute(select(RoadORM).order_by(RoadORM.id.desc()))
         return list(result.scalars().all())
 
-    async def search(self, query: str, *, limit: int = 20) -> list[RoadORM]:
+    async def search(
+        self,
+        query: str,
+        *,
+        limit: int = 20,
+        bias_lat: float | None = None,
+        bias_lng: float | None = None,
+    ) -> list[RoadORM]:
         like_query = f"%{query}%"
+        order_by = [RoadORM.id.desc()]
+        if bias_lat is not None and bias_lng is not None:
+            bias_point = func.ST_SetSRID(func.ST_MakePoint(bias_lng, bias_lat), 4326)
+            order_by = [func.ST_Distance(RoadORM.geom, bias_point), RoadORM.id.desc()]
+
         result = await self.session.execute(
             select(RoadORM)
             .where(RoadORM.name.ilike(like_query))
-            .order_by(RoadORM.id.desc())
+            .order_by(*order_by)
             .limit(limit)
         )
         return list(result.scalars().all())

@@ -678,6 +678,12 @@ Endpoint recommande pour le frontend:
 GET /api/v1/geocoding/search?q=anador
 ```
 
+Avec bias geographique optionnel:
+
+```http
+GET /api/v1/geocoding/search?q=anador&bias_lat=5.33&bias_lng=-4.02&limit=10
+```
+
 Cet endpoint cherche dans les donnees locales importees/enrichies:
 
 - `places`: lieux, POI, carrefours, gares, marches, points connus;
@@ -709,6 +715,8 @@ Exemple de reponse:
 Use case frontend:
 
 - utiliser cette route pour les champs depart et destination;
+- envoyer `bias_lat` et `bias_lng` si la position utilisateur est disponible;
+- appliquer un debounce cote app avant d'appeler l'endpoint;
 - afficher `label`;
 - envoyer `location.lng` et `location.lat` a l'endpoint de calcul d'itineraire;
 - afficher `type` pour distinguer une rue d'un lieu;
