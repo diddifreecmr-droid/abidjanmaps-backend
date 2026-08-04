@@ -22,7 +22,14 @@ class FakePlaceRepository:
     def __init__(self, session) -> None:
         self.session = session
 
-    async def search(self, query: str):
+    async def search(
+        self,
+        query: str,
+        *,
+        limit: int | None = None,
+        bias_lat: float | None = None,
+        bias_lng: float | None = None,
+    ):
         return [
             FakePlace(1, "Carrefour Anador", "landmark", ["Anador", "Carrefour Anador Yopougon"], "Repere local", True, {})
         ] if "anador" in query.lower() else []

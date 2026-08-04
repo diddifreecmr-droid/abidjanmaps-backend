@@ -118,22 +118,40 @@ class SQLAlchemyPlaceRepository(PlaceRepository):
         await self.session.refresh(place)
         return place
 
-    async def search(self, query: str) -> list[PlaceORM]:
+    async def search(
+        self,
+        query: str,
+        *,
+        limit: int | None = None,
+        bias_lat: float | None = None,
+        bias_lng: float | None = None,
+    ) -> list[PlaceORM]:
         like_query = f"%{query}%"
-        result = await self.session.execute(
+        order_by = [PlaceORM.id.desc()]
+        if bias_lat is not None and bias_lng is not None:
+            bias_point = func.ST_SetSRID(func.ST_MakePoint(bias_lng, bias_lat), 4326)
+            order_by = [func.ST_Distance(PlaceORM.location, bias_point), PlaceORM.id.desc()]
+
+        statement = (
             select(PlaceORM)
             .where(PlaceORM.name.ilike(like_query))
-            .order_by(PlaceORM.id.desc())
+            .order_by(*order_by)
         )
+        if limit is not None:
+            statement = statement.limit(limit)
+        result = await self.session.execute(statement)
         places = list(result.scalars().all())
         if places:
             return places
 
-        result = await self.session.execute(
+        statement = (
             select(PlaceORM)
             .where(PlaceORM.vernacular_name.ilike(like_query))
-            .order_by(PlaceORM.id.desc())
+            .order_by(*order_by)
         )
+        if limit is not None:
+            statement = statement.limit(limit)
+        result = await self.session.execute(statement)
         places = list(result.scalars().all())
         if places:
             return places
@@ -146,7 +164,7 @@ class SQLAlchemyPlaceRepository(PlaceRepository):
             for place in all_places
             if normalized in (place.vernacular_name or "").lower()
             or any(alias.lower().find(normalized) >= 0 for alias in place.aliases)
-        ]
+        ][:limit]
 
     async def set_validation_status(
         self,

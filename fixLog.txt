@@ -532,3 +532,17 @@ dependances Python.
 Pourquoi: certains packages Python ont une partie native en C/C++. `pip freeze`
 peut donc montrer le package comme installe, mais l'import Python peut echouer si
 une librairie Linux attendue par ce package manque dans l'image Docker.
+
+2026-08-04 14:56:12 - Bias geographique pour la recherche locale
+
+Ajout des parametres optionnels `bias_lat` et `bias_lng` sur les endpoints de
+recherche `geocoding/search`, `places/search` et `roads/search`.
+
+Quand les deux valeurs sont fournies, PostgreSQL/PostGIS trie les resultats avec
+`ST_Distance` pour remonter les lieux et routes proches de l'utilisateur en
+premier. Si un seul des deux parametres est fourni, le backend renvoie une erreur
+claire car le bias doit toujours etre une coordonnee complete.
+
+Pourquoi: l'autocomplete devient plus pertinent sans changer le contrat de base.
+Le frontend peut continuer a chercher par texte simple, puis ajouter le bias des
+que la position utilisateur est disponible.

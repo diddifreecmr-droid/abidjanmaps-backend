@@ -137,6 +137,37 @@ class FakeMapHistory:
         self.created_at = None
 
 
+def _distance_to_point(
+    location: dict | None,
+    *,
+    bias_lat: float,
+    bias_lng: float,
+) -> float:
+    if not location:
+        return float("inf")
+    if "coordinates" in location:
+        lng, lat = location["coordinates"]
+    else:
+        lat = location["lat"]
+        lng = location["lng"]
+    return (lat - bias_lat) ** 2 + (lng - bias_lng) ** 2
+
+
+def _distance_to_line_midpoint(
+    geometry: dict | None,
+    *,
+    bias_lat: float,
+    bias_lng: float,
+) -> float:
+    if not geometry or geometry.get("type") != "LineString":
+        return float("inf")
+    coordinates = geometry.get("coordinates") or []
+    if not coordinates:
+        return float("inf")
+    lng, lat = coordinates[len(coordinates) // 2]
+    return (lat - bias_lat) ** 2 + (lng - bias_lng) ** 2
+
+
 class FakeRoadRepository:
     store: list[FakeRoad] = []
     history: list[FakeMapHistory] = []
@@ -165,13 +196,29 @@ class FakeRoadRepository:
     async def list_all(self):
         return list(self.__class__.store)
 
-    async def search(self, query: str, *, limit: int = 20):
+    async def search(
+        self,
+        query: str,
+        *,
+        limit: int = 20,
+        bias_lat: float | None = None,
+        bias_lng: float | None = None,
+    ):
         normalized = query.lower()
-        return [
+        items = [
             item
             for item in self.__class__.store
             if normalized in item.name.lower()
-        ][:limit]
+        ]
+        if bias_lat is not None and bias_lng is not None:
+            items.sort(
+                key=lambda item: _distance_to_line_midpoint(
+                    item.geometry,
+                    bias_lat=bias_lat,
+                    bias_lng=bias_lng,
+                )
+            )
+        return items if limit is None else items[:limit]
 
     async def get_by_id(self, road_id: int):
         for item in self.__class__.store:
@@ -252,14 +299,30 @@ class FakePlaceRepository:
     async def list_all(self):
         return list(self.__class__.store)
 
-    async def search(self, query: str):
+    async def search(
+        self,
+        query: str,
+        *,
+        limit: int | None = None,
+        bias_lat: float | None = None,
+        bias_lng: float | None = None,
+    ):
         normalized = query.lower()
-        return [
+        items = [
             item
             for item in self.__class__.store
             if normalized in item.name.lower()
             or any(normalized in alias.lower() for alias in item.aliases)
         ]
+        if bias_lat is not None and bias_lng is not None:
+            items.sort(
+                key=lambda item: _distance_to_point(
+                    item.location,
+                    bias_lat=bias_lat,
+                    bias_lng=bias_lng,
+                )
+            )
+        return items if limit is None else items[:limit]
 
     async def get_by_id(self, place_id: int):
         for item in self.__class__.store:
@@ -619,6 +682,45 @@ def test_geocoding_search_returns_places_and_roads() -> None:
     assert {item["type"] for item in body} == {"place", "road"}
     assert body[0]["location"]["lng"] == -4.0
     assert any(item["label"] == "Rue Anador" for item in body)
+
+
+def test_geocoding_search_uses_bias_to_rank_near_results() -> None:
+    client.post(
+        "/api/v1/places",
+        json={
+            "name": "Pharmacie Anador Nord",
+            "category": "pharmacy",
+            "location": {"lng": -3.75, "lat": 5.5},
+            "aliases": ["Anador"],
+            "description": "Resultat plus loin",
+            "extra_metadata": {"source": "osm"},
+        },
+    )
+    client.post(
+        "/api/v1/places",
+        json={
+            "name": "Pharmacie Anador Proche",
+            "category": "pharmacy",
+            "location": {"lng": -4.001, "lat": 5.301},
+            "aliases": ["Anador"],
+            "description": "Resultat proche",
+            "extra_metadata": {"source": "osm"},
+        },
+    )
+
+    response = client.get(
+        "/api/v1/geocoding/search?q=Anador&bias_lat=5.3&bias_lng=-4.0"
+    )
+
+    assert response.status_code == 200
+    assert response.json()[0]["label"] == "Pharmacie Anador Proche"
+
+
+def test_geocoding_search_requires_complete_bias() -> None:
+    response = client.get("/api/v1/geocoding/search?q=Anador&bias_lat=5.3")
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "bias_lat and bias_lng must be provided together"
 
 
 def test_place_location_reads_postgis_geometry_when_location_is_not_a_dict() -> None:
