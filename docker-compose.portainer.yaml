@@ -19,7 +19,7 @@ services:
       retries: 20
 
   osrm:
-    image: ghcr.io/project-osrm/osrm-backend:26.7.3
+    image: ghcr.io/project-osrm/osrm-backend:v26.7.3
     restart: unless-stopped
     command:
       - osrm-routed
