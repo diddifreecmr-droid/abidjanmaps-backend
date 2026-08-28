@@ -168,6 +168,11 @@ Le service `map-validation` appelle le backend par le reseau Docker interne avec
 BACKEND_BASE_URL=http://backend:8000
 ```
 
+Note: la validation publique utilise des endpoints limites comme
+`roads/search`, `places/search` et `geocoding/autocomplete`. Elle ne charge pas
+`/roads` ou `/places` en entier, car une base OSM importee peut contenir trop de
+lignes pour un simple health check.
+
 Import de la base OSM locale depuis le fichier `.osm.pbf` monte dans Docker:
 
 ```bash

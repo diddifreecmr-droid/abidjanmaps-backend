@@ -38,6 +38,7 @@ def _post_json(client: httpx.Client, path: str, payload: dict[str, Any]) -> Any:
 def run_checks() -> list[dict[str, Any]]:
     fixture = json.loads(SEED_FILE.read_text(encoding="utf-8"))
     route_request = fixture["route_request"]
+    first_seed_road_name = fixture["roads"][0]["name"]
     checks: list[dict[str, Any]] = []
 
     with httpx.Client(timeout=30) as client:
@@ -49,25 +50,27 @@ def run_checks() -> list[dict[str, Any]]:
         assert db_health["status"] == "ok"
         checks.append(_ok("db-health", {"database": db_health.get("database")}))
 
-        roads = _get_json(client, "/api/v1/roads")
+        roads = _get_json(
+            client,
+            f"/api/v1/roads/search?q={quote(first_seed_road_name)}&limit=5",
+        )
         assert isinstance(roads, list)
-        assert roads, "Expected at least one seeded road"
+        assert roads, "Expected roads search to find at least one seeded road"
         assert any(road.get("geometry") for road in roads), "Roads must expose geometry"
-        checks.append(_ok("roads", {"count": len(roads)}))
+        checks.append(_ok("roads-search", {"count": len(roads)}))
 
-        first_road_name = roads[0]["name"]
         geocoding = _get_json(
             client,
-            f"/api/v1/geocoding/search?q={quote(first_road_name)}",
+            f"/api/v1/geocoding/autocomplete?q={quote(first_seed_road_name)}&limit=5",
         )
-        assert isinstance(geocoding, list)
-        assert geocoding, "Expected geocoding search to find at least one road/place"
-        assert geocoding[0].get("location") is not None
-        checks.append(_ok("geocoding-search", {"count": len(geocoding)}))
+        assert geocoding["status"] == "ok"
+        assert geocoding["results"], "Expected autocomplete to find at least one road/place"
+        assert geocoding["results"][0].get("location") is not None
+        checks.append(_ok("geocoding-autocomplete", {"count": geocoding["count"]}))
 
-        places = _get_json(client, "/api/v1/places")
+        places = _get_json(client, "/api/v1/places/search?q=plateau&limit=5")
         assert isinstance(places, list)
-        checks.append(_ok("places", {"count": len(places)}))
+        checks.append(_ok("places-search", {"count": len(places)}))
 
         reports = _get_json(client, "/api/v1/route-reports")
         assert isinstance(reports, list)
@@ -86,7 +89,7 @@ def run_checks() -> list[dict[str, Any]]:
         items = proposals["proposals"]
         assert items, "Expected at least one route proposal"
         assert items[0]["rank"] == 1
-        assert items[0]["score_breakdown"]["vehicle_constraints"]["eligible"] is True
+        assert "eligible" in items[0]["score_breakdown"]["vehicle_constraints"]
         assert items[0].get("enrichment") is not None
         checks.append(
             _ok(

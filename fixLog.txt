@@ -675,6 +675,30 @@ valide avant d'influencer le scoring.
 Mise a jour de `PHASE_STATUS.md` pour pointer vers ce protocole et resumer son
 contenu.
 
+2026-08-28 09:30:00 - Validation publique adaptee aux bases OSM reelles
+
+Correction de `scripts/check_staging_public_api.py`.
+
+Avant, le script appelait `GET /api/v1/roads` puis `GET /api/v1/places`. Avec
+une base OSM importee, ces endpoints peuvent retourner beaucoup trop de lignes
+et provoquer un timeout pendant la validation staging.
+
+Le script utilise maintenant des endpoints limites:
+- `GET /api/v1/roads/search?...&limit=5`;
+- `GET /api/v1/geocoding/autocomplete?...&limit=5`;
+- `GET /api/v1/places/search?q=plateau&limit=5`.
+
+Le check routing ne force plus `vehicle_eligible=true`, car avec des donnees
+terrain reelles une route peut exister, etre calculee correctement, mais porter
+un malus ou une contrainte vehicule. Le test verifie maintenant que le champ
+`eligible` existe dans le `score_breakdown`.
+
+Ajout du test `test_staging_public_api_script.py` pour garantir que la
+validation publique ne recharge plus les listes completes `roads` et `places`.
+
+Pourquoi: un script de validation doit verifier que le service fonctionne, pas
+faire un export complet de la base cartographique.
+
 2026-08-25 10:35:00 - Protocole test terrain Map Core 1.4
 
 Ajout du document `FIELD_TEST_PROTOCOL.md`.
