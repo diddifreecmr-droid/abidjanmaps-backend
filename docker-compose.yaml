@@ -104,5 +104,20 @@ services:
       db:
         condition: service_healthy
 
+  map-validation:
+    build:
+      context: ./backend
+    restart: "no"
+    profiles: ["validation"]
+    environment:
+      BACKEND_BASE_URL: http://backend:8000
+      VALIDATE_STAGING_MODE: ${VALIDATE_STAGING_MODE:-public}
+      PHASE3_TEST_EMAIL: ${PHASE3_TEST_EMAIL:-}
+      PHASE3_TEST_PASSWORD: ${PHASE3_TEST_PASSWORD:-}
+    command: ["python", "-m", "scripts.validate_staging"]
+    depends_on:
+      backend:
+        condition: service_healthy
+
 volumes:
   postgis_data:

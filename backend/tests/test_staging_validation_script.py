@@ -11,14 +11,20 @@ def test_validate_staging_public_mode_skips_phase3(monkeypatch) -> None:
         "run_checks",
         lambda: [{"check": "health", "status": "ok"}],
     )
+    monkeypatch.setattr(
+        validate_staging.check_abidjan_routing,
+        "run_checks",
+        lambda: {"status": "ok", "summary": {"total": 1, "ok": 1, "error": 0}},
+    )
 
     result = validate_staging.run_validation()
 
     assert result["status"] == "ok"
     assert result["base_url"] == "https://staging.example.test"
     assert result["checks"][0]["name"] == "public-api"
-    assert result["checks"][1]["name"] == "phase3-map-traces"
-    assert result["checks"][1]["status"] == "skipped"
+    assert result["checks"][1]["name"] == "abidjan-routing"
+    assert result["checks"][2]["name"] == "phase3-map-traces"
+    assert result["checks"][2]["status"] == "skipped"
 
 
 def test_validate_staging_full_mode_requires_phase3_credentials(monkeypatch) -> None:
@@ -32,13 +38,19 @@ def test_validate_staging_full_mode_requires_phase3_credentials(monkeypatch) -> 
         "run_checks",
         lambda: [{"check": "health", "status": "ok"}],
     )
+    monkeypatch.setattr(
+        validate_staging.check_abidjan_routing,
+        "run_checks",
+        lambda: {"status": "ok", "summary": {"total": 1, "ok": 1, "error": 0}},
+    )
 
     result = validate_staging.run_validation()
 
     assert result["status"] == "error"
-    assert result["checks"][1]["name"] == "phase3-map-traces"
-    assert result["checks"][1]["status"] == "error"
-    assert "Missing PHASE3_TEST_EMAIL" in result["checks"][1]["message"]
+    assert result["checks"][1]["name"] == "abidjan-routing"
+    assert result["checks"][2]["name"] == "phase3-map-traces"
+    assert result["checks"][2]["status"] == "error"
+    assert "Missing PHASE3_TEST_EMAIL" in result["checks"][2]["message"]
 
 
 def test_validate_staging_full_mode_runs_phase3_when_credentials_exist(monkeypatch) -> None:
@@ -51,6 +63,11 @@ def test_validate_staging_full_mode_runs_phase3_when_credentials_exist(monkeypat
         lambda: [{"check": "health", "status": "ok"}],
     )
     monkeypatch.setattr(
+        validate_staging.check_abidjan_routing,
+        "run_checks",
+        lambda: {"status": "ok", "summary": {"total": 1, "ok": 1, "error": 0}},
+    )
+    monkeypatch.setattr(
         validate_staging.check_phase3_map_traces,
         "run_checks",
         lambda: {"status": "ok", "trace_id": 1},
@@ -60,5 +77,6 @@ def test_validate_staging_full_mode_runs_phase3_when_credentials_exist(monkeypat
 
     assert result["status"] == "ok"
     assert result["checks"][0]["name"] == "public-api"
-    assert result["checks"][1]["name"] == "phase3-map-traces"
-    assert result["checks"][1]["data"]["trace_id"] == 1
+    assert result["checks"][1]["name"] == "abidjan-routing"
+    assert result["checks"][2]["name"] == "phase3-map-traces"
+    assert result["checks"][2]["data"]["trace_id"] == 1

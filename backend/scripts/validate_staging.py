@@ -4,7 +4,11 @@ import os
 import time
 from typing import Any, Callable
 
-from scripts import check_phase3_map_traces, check_staging_public_api
+from scripts import (
+    check_abidjan_routing,
+    check_phase3_map_traces,
+    check_staging_public_api,
+)
 from scripts.seed_phase2 import seed_phase2
 
 
@@ -81,6 +85,12 @@ def run_validation() -> dict[str, Any]:
         _run_step(
             "public-api",
             check_staging_public_api.run_checks,
+        )
+    )
+    checks.append(
+        _run_step(
+            "abidjan-routing",
+            check_abidjan_routing.run_checks,
         )
     )
 

@@ -546,3 +546,148 @@ claire car le bias doit toujours etre une coordonnee complete.
 Pourquoi: l'autocomplete devient plus pertinent sans changer le contrat de base.
 Le frontend peut continuer a chercher par texte simple, puis ajouter le bias des
 que la position utilisateur est disponible.
+
+2026-08-25 09:25:00 - Index trigram et index spatiaux pour la recherche
+
+Ajout d'une migration Alembic `20260825_0011_search_trigram_indexes.py`.
+Elle active l'extension PostgreSQL `pg_trgm`, puis ajoute des index GIN trigram
+sur `places.name`, `places.vernacular_name`, `places.category` et `roads.name`.
+
+Ajout aussi d'index GiST sur les colonnes geographiques principales:
+`places.location`, `roads.geom` et `route_reports.geometry`.
+
+Pourquoi: l'autocomplete et la recherche locale vont interroger beaucoup de
+noms importes depuis OSM. Les index trigram accelerent les recherches partielles
+comme `%plateau%`, et les index GiST accelerent les calculs geographiques comme
+la proximite, le bias utilisateur et l'intersection avec un itineraire.
+
+Ajout d'un test d'architecture qui verifie que cette migration garde bien les
+index critiques. Ajout aussi d'un `tests/conftest.py` minimal pour rendre les
+imports `app.*` stables pendant la collecte des tests, y compris dans
+`tests/integration`.
+
+Validation: `pytest` passe avec 66 tests OK, 1 test d'integration PostGIS saute
+par defaut, et 2 warnings non bloquants.
+
+2026-08-25 09:40:00 - Endpoint autocomplete geocoding pour le frontend
+
+Ajout de `GET /api/v1/geocoding/autocomplete`.
+
+Cet endpoint reutilise la recherche geocoding existante, mais renvoie une
+reponse plus stable pour le frontend:
+`status`, `query`, `count`, puis `results`.
+
+Chaque resultat contient les champs utiles a une interface d'autocomplete:
+`type`, `id`, `label`, `subtitle`, `category`, `location`, `source` et
+`metadata`.
+
+Regles ajoutees:
+- minimum 2 caracteres pour eviter de lancer une recherche trop large;
+- limite par defaut a 8 resultats;
+- limite maximum a 20 resultats;
+- support du bias geographique avec `bias_lat` et `bias_lng`;
+- erreur claire si un seul des deux champs de bias est fourni.
+
+Pourquoi: le frontend peut afficher directement les suggestions sans reconstruire
+un format different pour les places et les routes. L'ancien endpoint
+`/geocoding/search` reste disponible pour compatibilite.
+
+Validation: ajout de tests sur le contrat autocomplete, la longueur minimale et
+le bias incomplet. `pytest` passe avec 69 tests OK, 1 test d'integration PostGIS
+saute par defaut, et 2 warnings non bloquants.
+
+2026-08-25 09:55:00 - Validation routing reel Abidjan
+
+Ajout du script `scripts/check_abidjan_routing.py`.
+
+Ce script appelle le backend via `BACKEND_BASE_URL`, puis teste plusieurs trajets
+connus dans Abidjan: Yopougon Siporex vers Plateau, Cocody Riviera vers Plateau,
+Abobo vers Cocody, Aeroport vers Plateau, Marcory vers Treichville et Bingerville
+vers Plateau.
+
+Pour chaque trajet, il verifie:
+- que le backend retourne au moins une proposition;
+- que la geometrie est un GeoJSON `LineString` valide;
+- que la distance est dans une fourchette plausible;
+- que la duree est dans une fourchette plausible;
+- que le scoring vehicule est present;
+- que l'enrichissement local est charge.
+
+Le script est aussi branche dans `scripts/validate_staging.py` comme verification
+publique. Il ne demande pas de login, donc il peut tourner facilement en local,
+dans Docker ou sur le VPS.
+
+Ajout d'un test unitaire avec client HTTP fake pour garantir le format du rapport
+JSON sans appeler OSRM pendant `pytest`.
+
+Mise a jour de `FRONTEND_BRIEFING.md` avec le contrat autocomplete, le use case
+depart/destination et l'usage attendu de `/api/v1/routes/proposals/detail`.
+
+2026-08-25 10:15:00 - Preparation Docker pour validation terrain Map Core 1.4
+
+Ajout d'un service Docker Compose `map-validation` dans les fichiers
+`docker-compose.yaml` et `docker-compose.portainer.yaml`.
+
+Ce service reutilise l'image backend et lance:
+`python -m scripts.validate_staging`.
+
+Il appelle le backend par le reseau interne Docker avec:
+`BACKEND_BASE_URL=http://backend:8000`.
+
+Par defaut, le mode est `VALIDATE_STAGING_MODE=public`, donc il teste les
+endpoints publics, le routing reel Abidjan et les propositions de routes sans
+demander de compte admin.
+
+Si on definit `VALIDATE_STAGING_MODE=full` avec `PHASE3_TEST_EMAIL` et
+`PHASE3_TEST_PASSWORD`, le meme service teste aussi le workflow des traces GPS:
+demarrage de trace, envoi des positions, finish, analyse, insight, validation et
+conversion en route_report.
+
+Pourquoi: avant d'envoyer une version en staging ou avant une session avec les
+chauffeurs, on peut lancer une verification Docker reproductible sans entrer
+manuellement dans le conteneur.
+
+Mise a jour de `README.md`, `DEPLOYMENT.md` et `FRONTEND_BRIEFING.md` avec les
+commandes Docker, le role de DiddiGo et le pipeline GPS vers Map Core.
+
+2026-08-25 10:35:00 - Protocole de test terrain DiddiMap puis DiddiGo
+
+Ajout du document `FIELD_TEST_PROTOCOL.md`.
+
+Le protocole separe volontairement les tests en deux grandes parties:
+
+1. tester DiddiMap seul;
+2. tester DiddiGo branche sur DiddiMap.
+
+La partie DiddiMap couvre l'autocomplete, le calcul de route simple, les
+alternatives avec scoring, les signalements terrain, les traces GPS, l'analyse
+des traces et la revue admin des insights.
+
+La partie DiddiGo explique ce que DiddiGo doit envoyer a DiddiMap: depart,
+destination, profil vehicule, distance/duree prevues, geometrie prevue,
+positions GPS, timestamps, precision GPS et vitesse telephone si disponible.
+
+Le document rappelle la regle produit importante: une trace GPS ne modifie pas
+directement la carte. Elle cree d'abord un insight, puis un admin valide ou
+rejette, puis l'insight peut devenir un route_report qui devra lui aussi etre
+valide avant d'influencer le scoring.
+
+Mise a jour de `PHASE_STATUS.md` pour pointer vers ce protocole et resumer son
+contenu.
+
+2026-08-25 10:35:00 - Protocole test terrain Map Core 1.4
+
+Ajout du document `FIELD_TEST_PROTOCOL.md`.
+
+Ce document decrit comment organiser le test terrain avec 5 chauffeurs:
+objectifs, roles, pre-requis techniques, donnees attendues depuis DiddiGo,
+scenarios de test, trajets recommandes, volumes cibles, criteres de succes,
+criteres d'echec, revue admin et livrables de fin de test.
+
+Le protocole insiste sur une regle importante: une trace GPS ne modifie jamais
+directement la carte. Elle produit d'abord un `map_trace_insight`, qui doit etre
+valide par un admin avant de devenir un `route_report`, puis le `route_report`
+doit lui aussi etre valide avant d'influencer le scoring.
+
+Mise a jour de `README.md`, `DEPLOYMENT.md` et `PHASE_STATUS.md` pour pointer
+vers ce protocole.

@@ -21,6 +21,7 @@ from app.shared.infrastructure.persistence.base import Base
 
 
 APP_ROOT = Path(__file__).resolve().parents[1] / "app"
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_module_owned_models_share_one_metadata_registry() -> None:
@@ -70,3 +71,32 @@ def test_canonical_code_does_not_import_legacy_packages() -> None:
         for path in root.rglob("*.py")
     )
     assert not any(forbidden in source for forbidden in forbidden_imports)
+
+
+def test_search_indexes_migration_keeps_trigram_and_spatial_indexes() -> None:
+    migration = (
+        BACKEND_ROOT
+        / "alembic"
+        / "versions"
+        / "20260825_0011_search_trigram_indexes.py"
+    )
+    source = migration.read_text(encoding="utf-8")
+
+    assert "CREATE EXTENSION IF NOT EXISTS pg_trgm" in source
+    for index_name in (
+        "ix_places_name_trgm",
+        "ix_places_vernacular_name_trgm",
+        "ix_places_category_trgm",
+        "ix_roads_name_trgm",
+    ):
+        assert index_name in source
+    assert source.count('postgresql_using="gin"') == 4
+    assert source.count('"gin_trgm_ops"') == 4
+
+    for index_name in (
+        "ix_places_location_gist",
+        "ix_roads_geom_gist",
+        "ix_route_reports_geometry_gist",
+    ):
+        assert index_name in source
+    assert source.count('postgresql_using="gist"') == 3
