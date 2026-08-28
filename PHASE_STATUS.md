@@ -243,6 +243,54 @@ Options possibles:
 Pour le moment, la manipulation OSRM peut rester manuelle en staging, mais elle
 devra etre automatisee avant production.
 
+## Phase 3 V3 - Test terrain Map Core 1.4
+
+Statut backend:
+
+```text
+Protocole pret
+```
+
+Objectif:
+
+- organiser le test avec 5 chauffeurs;
+- valider autocomplete, routing, alternatives et traces GPS;
+- verifier que les traces produisent des insights utiles;
+- faire valider les insights par un admin;
+- convertir certains insights en route_reports;
+- verifier que les route_reports valides influencent le scoring.
+
+Document operationnel:
+
+```text
+FIELD_TEST_PROTOCOL.md
+```
+
+Contenu du protocole:
+
+- test DiddiMap seul;
+- test autocomplete;
+- test route simple;
+- test alternatives et scoring;
+- test signalements terrain;
+- test traces GPS Map Core;
+- revue admin des insights;
+- test DiddiGo branche sur DiddiMap;
+- objectifs chiffres pour 2 a 4 semaines;
+- rapport quotidien;
+- criteres de decision en fin de test.
+
+Pre-requis avant lancement:
+
+- staging deploye;
+- migrations appliquees;
+- OSRM disponible;
+- PostGIS disponible;
+- compte admin staging fonctionnel;
+- frontend branche sur staging;
+- validation Docker OK;
+- equipe DiddiGo prete a envoyer les traces GPS.
+
 ## Phase 3 V1 - Map Traces
 
 Statut backend:

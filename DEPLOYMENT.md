@@ -281,6 +281,66 @@ Docs:
 http://abidjanmaps-backend-staging.diddifree.com/docs
 ```
 
+Avant une session avec les chauffeurs testeurs, suivre aussi:
+
+```text
+FIELD_TEST_PROTOCOL.md
+```
+
+## Validation Docker avant staging
+
+Le projet contient un service Compose dedie aux validations:
+
+```text
+map-validation
+```
+
+Il reutilise le code backend, attend que le service `backend` soit healthy, puis
+lance:
+
+```text
+python -m scripts.validate_staging
+```
+
+En local Windows, depuis la racine du projet:
+
+```cmd
+docker compose --profile validation run --rm map-validation
+```
+
+Sur Portainer/VPS, le meme service existe dans `docker-compose.portainer.yaml`.
+Le mode par defaut est public:
+
+```text
+VALIDATE_STAGING_MODE=public
+```
+
+Ce mode verifie:
+
+- health backend;
+- health DB;
+- endpoints publics;
+- autocomplete/geocoding de base;
+- calcul de routes reelles Abidjan;
+- propositions de routes avec scoring.
+
+Pour tester aussi les traces GPS et le workflow admin, definir:
+
+```text
+VALIDATE_STAGING_MODE=full
+PHASE3_TEST_EMAIL=admin@example.com
+PHASE3_TEST_PASSWORD=mot-de-passe-admin
+```
+
+Puis lancer le service `map-validation`.
+
+Interpretation du resultat:
+
+- `status=ok`: la stack est prete pour test terrain;
+- `status=error`: lire `checks[].message`, corriger, puis relancer;
+- un test `phase3-map-traces` absent ou saute signifie que le mode public est
+  utilise ou que les identifiants admin ne sont pas fournis.
+
 ## Comptes utilisateurs par environnement
 
 Chaque environnement a sa propre base PostgreSQL. Un utilisateur cree en local

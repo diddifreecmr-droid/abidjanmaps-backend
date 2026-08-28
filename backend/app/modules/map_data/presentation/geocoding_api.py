@@ -29,6 +29,39 @@ def _line_representative_location(geometry: dict[str, Any] | None) -> dict | Non
     return {"lng": lng, "lat": lat}
 
 
+def _autocomplete_subtitle(item: dict) -> str:
+    category = item.get("category") or item["type"]
+    source = item.get("source") or "local"
+    return f"{category} - {source}"
+
+
+def _autocomplete_response(
+    *,
+    query: str,
+    limit: int,
+    results: list[dict],
+) -> dict:
+    items = [
+        {
+            "type": item["type"],
+            "id": item["id"],
+            "label": item["label"],
+            "subtitle": _autocomplete_subtitle(item),
+            "category": item.get("category"),
+            "location": item["location"],
+            "source": item.get("source", "local"),
+            "metadata": item.get("metadata", {}),
+        }
+        for item in results[:limit]
+    ]
+    return {
+        "status": "ok",
+        "query": query,
+        "count": len(items),
+        "results": items,
+    }
+
+
 @router.get("/geocoding/search")
 async def search_geocoding(
     q: str = Query(min_length=1),
@@ -95,3 +128,21 @@ async def search_geocoding(
         )
 
     return results[:limit]
+
+
+@router.get("/geocoding/autocomplete")
+async def autocomplete_geocoding(
+    q: str = Query(min_length=2),
+    limit: int = Query(default=8, ge=1, le=20),
+    bias_lat: float | None = Query(default=None, ge=-90, le=90),
+    bias_lng: float | None = Query(default=None, ge=-180, le=180),
+    session: AsyncSession = Depends(get_async_session),
+) -> dict:
+    results = await search_geocoding(
+        q=q,
+        limit=limit,
+        bias_lat=bias_lat,
+        bias_lng=bias_lng,
+        session=session,
+    )
+    return _autocomplete_response(query=q, limit=limit, results=results)

@@ -1187,3 +1187,188 @@ Une trace GPS ne modifie pas automatiquement le Map Core.
 
 Elle sert d'abord a produire une observation. Plus tard, cette observation pourra
 devenir une suggestion, puis une donnee validee par un admin.
+
+## Map Core V1.3 - Autocomplete et routing reel Abidjan
+
+### Autocomplete frontend
+
+Le frontend peut utiliser l'endpoint dedie:
+
+```http
+GET /api/v1/geocoding/autocomplete?q=plateau&limit=8&bias_lat=5.33&bias_lng=-4.02
+```
+
+Regles cote frontend:
+
+- ne pas appeler l'API avant 2 caracteres;
+- utiliser un debounce d'environ 300 ms;
+- envoyer `bias_lat` et `bias_lng` si la position utilisateur est disponible;
+- afficher maximum 5 a 8 suggestions dans l'UI;
+- garder `label` comme texte principal;
+- garder `subtitle` comme texte secondaire;
+- utiliser `location` quand l'utilisateur selectionne une suggestion.
+
+Format de reponse:
+
+```json
+{
+  "status": "ok",
+  "query": "plateau",
+  "count": 1,
+  "results": [
+    {
+      "type": "place",
+      "id": 12,
+      "label": "Plateau",
+      "subtitle": "commune - osm",
+      "category": "commune",
+      "location": {
+        "lng": -4.016,
+        "lat": 5.3204
+      },
+      "source": "osm",
+      "metadata": {
+        "source": "osm"
+      }
+    }
+  ]
+}
+```
+
+Use case depart/destination:
+
+- l'utilisateur tape un lieu;
+- le frontend appelle autocomplete;
+- l'utilisateur choisit une suggestion;
+- le frontend garde `location.lat` et `location.lng`;
+- ces coordonnees deviennent `start` ou `end` pour le calcul d'itineraire.
+
+### Routing reel Abidjan
+
+Le backend a maintenant un script de validation pour tester des trajets connus
+d'Abidjan:
+
+```bash
+python -m scripts.check_abidjan_routing
+```
+
+Ce script teste des trajets comme:
+
+- Yopougon Siporex vers Plateau;
+- Cocody Riviera vers Plateau;
+- Abobo vers Cocody;
+- Aeroport vers Plateau;
+- Marcory vers Treichville;
+- Bingerville vers Plateau.
+
+Pour chaque trajet, le script verifie:
+
+- OSRM disponible;
+- au moins une proposition de route;
+- GeoJSON valide;
+- distance plausible;
+- duree plausible;
+- scoring backend present;
+- enrichissement local present.
+
+Le frontend n'appelle pas ce script directement. Il sert a l'equipe backend/devops
+pour valider que l'environnement local ou staging calcule correctement les routes.
+
+Endpoint utilise par le frontend pour les alternatives:
+
+```http
+POST /api/v1/routes/proposals/detail
+```
+
+Payload:
+
+```json
+{
+  "start": {
+    "lat": 5.3367,
+    "lng": -4.084
+  },
+  "end": {
+    "lat": 5.3204,
+    "lng": -4.016
+  },
+  "profile": "car",
+  "vehicle_width_m": 1.9,
+  "vehicle_weight_t": 2.5
+}
+```
+
+Le frontend doit afficher en priorite la proposition avec `rank = 1`.
+Les autres propositions peuvent etre affichees comme alternatives.
+
+## Preparation DiddiGo pour les tests terrain
+
+DiddiGo doit se preparer a envoyer les traces GPS a DiddiMap apres une course
+terminee. DiddiGo ne doit pas analyser la qualite de la route lui-meme. Il doit
+envoyer les faits.
+
+Donnees minimales attendues:
+
+```json
+{
+  "source": "diddigo",
+  "external_trip_id": "ride_123",
+  "profile": "car",
+  "start": {
+    "lat": 5.3367,
+    "lng": -4.084
+  },
+  "end": {
+    "lat": 5.3204,
+    "lng": -4.016
+  },
+  "planned_distance_m": 12300,
+  "planned_duration_s": 1800,
+  "planned_route_geometry": {
+    "type": "LineString",
+    "coordinates": [
+      [-4.084, 5.3367],
+      [-4.016, 5.3204]
+    ]
+  },
+  "positions": [
+    {
+      "lat": 5.3367,
+      "lng": -4.084,
+      "accuracy_m": 8,
+      "speed_mps": 4.2,
+      "recorded_at": "2026-08-25T10:00:00Z"
+    }
+  ]
+}
+```
+
+Dans l'API actuelle, cet envoi se fait en plusieurs appels:
+
+```http
+POST /api/v1/map-traces/start
+POST /api/v1/map-traces/{trace_id}/positions
+POST /api/v1/map-traces/{trace_id}/finish
+POST /api/v1/map-traces/{trace_id}/analyze
+```
+
+Pipeline d'enrichissement:
+
+```text
+DiddiGo positions GPS
+-> DiddiMap stocke la trace
+-> DiddiMap analyse distance, duree, vitesse, arrets, ecarts
+-> DiddiMap cree un map_trace_insight
+-> admin valide ou rejette
+-> insight valide peut devenir route_report
+-> route_report influence le scoring des prochaines routes
+```
+
+Regle produit:
+
+```text
+Une trace GPS ne modifie jamais directement la carte.
+```
+
+Il faut une validation humaine avant de transformer une observation terrain en
+donnee officielle du Map Core.

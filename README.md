@@ -145,6 +145,29 @@ set "PHASE3_TEST_PASSWORD=votre-mot-de-passe"
 python -m scripts.validate_staging
 ```
 
+Validation via Docker Compose, sans entrer dans le conteneur:
+
+```cmd
+docker compose --profile validation run --rm map-validation
+```
+
+Par defaut, cette commande lance les checks publics: health, DB, recherche,
+routing Abidjan et propositions de routes. Pour inclure le test complet des
+traces GPS avec authentification:
+
+```cmd
+set "VALIDATE_STAGING_MODE=full"
+set "PHASE3_TEST_EMAIL=admin@example.com"
+set "PHASE3_TEST_PASSWORD=votre-mot-de-passe"
+docker compose --profile validation run --rm map-validation
+```
+
+Le service `map-validation` appelle le backend par le reseau Docker interne avec:
+
+```text
+BACKEND_BASE_URL=http://backend:8000
+```
+
 Import de la base OSM locale depuis le fichier `.osm.pbf` monte dans Docker:
 
 ```bash
@@ -181,4 +204,5 @@ Le contrat API et les use cases cote frontend sont resumes dans
 `PHASE_STATUS.md`. La collecte GPS et la future analyse des traces sont
 expliquees dans `PHASE3_GPS_ANALYSIS.md` et `FRONTEND_PHASE3_BRIEF.md`. La
 separation entre tests automatiques, staging et domaine est expliquee dans
-`TESTING_GUIDE.md`.
+`TESTING_GUIDE.md`. Le protocole operationnel pour les chauffeurs testeurs est
+dans `FIELD_TEST_PROTOCOL.md`.

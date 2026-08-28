@@ -723,6 +723,51 @@ def test_geocoding_search_requires_complete_bias() -> None:
     assert response.json()["detail"] == "bias_lat and bias_lng must be provided together"
 
 
+def test_geocoding_autocomplete_returns_frontend_friendly_contract() -> None:
+    client.post(
+        "/api/v1/places",
+        json={
+            "name": "Carrefour Siporex",
+            "category": "landmark",
+            "location": {"lng": -4.084, "lat": 5.337},
+            "aliases": ["Siporex"],
+            "description": "Repere local",
+            "extra_metadata": {"source": "osm"},
+        },
+    )
+
+    response = client.get("/api/v1/geocoding/autocomplete?q=Sip&limit=5")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ok"
+    assert body["query"] == "Sip"
+    assert body["count"] == 1
+    assert body["results"][0] == {
+        "type": "place",
+        "id": 1,
+        "label": "Carrefour Siporex",
+        "subtitle": "landmark - osm",
+        "category": "landmark",
+        "location": {"lng": -4.084, "lat": 5.337},
+        "source": "osm",
+        "metadata": {"source": "osm"},
+    }
+
+
+def test_geocoding_autocomplete_requires_two_characters() -> None:
+    response = client.get("/api/v1/geocoding/autocomplete?q=A")
+
+    assert response.status_code == 400
+
+
+def test_geocoding_autocomplete_requires_complete_bias() -> None:
+    response = client.get("/api/v1/geocoding/autocomplete?q=Anador&bias_lat=5.3")
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "bias_lat and bias_lng must be provided together"
+
+
 def test_place_location_reads_postgis_geometry_when_location_is_not_a_dict() -> None:
     class FakePostgisPlace:
         id = 1
