@@ -51,6 +51,23 @@ class JourneyService:
         positions: list[JourneyPosition],
     ) -> list[JourneyPosition]:
         detail = await self.repository.get_detail(journey_id, user_id)
+        return await self._add_positions_from_detail(journey_id, detail, positions)
+
+    async def add_positions_to_trace(
+        self,
+        *,
+        journey_id: int,
+        positions: list[JourneyPosition],
+    ) -> list[JourneyPosition]:
+        detail = await self.repository.get_detail_for_admin(journey_id)
+        return await self._add_positions_from_detail(journey_id, detail, positions)
+
+    async def _add_positions_from_detail(
+        self,
+        journey_id: int,
+        detail: JourneyDetail | None,
+        positions: list[JourneyPosition],
+    ) -> list[JourneyPosition]:
         if detail is None:
             raise JourneyNotFoundError("Journey not found")
         if detail.journey.status != "started":
@@ -68,6 +85,35 @@ class JourneyService:
         finished_at: datetime | None = None,
     ) -> Journey:
         detail = await self.repository.get_detail(journey_id, user_id)
+        return await self._finish_from_detail(
+            journey_id=journey_id,
+            user_id=user_id,
+            detail=detail,
+            finished_at=finished_at,
+        )
+
+    async def finish_trace(
+        self,
+        *,
+        journey_id: int,
+        finished_at: datetime | None = None,
+    ) -> Journey:
+        detail = await self.repository.get_detail_for_admin(journey_id)
+        return await self._finish_from_detail(
+            journey_id=journey_id,
+            user_id=None,
+            detail=detail,
+            finished_at=finished_at,
+        )
+
+    async def _finish_from_detail(
+        self,
+        *,
+        journey_id: int,
+        user_id: int | None,
+        detail: JourneyDetail | None,
+        finished_at: datetime | None,
+    ) -> Journey:
         if detail is None:
             raise JourneyNotFoundError("Journey not found")
         if detail.journey.status != "started":
@@ -105,6 +151,27 @@ class JourneyService:
 
     async def analyze_journey(self, *, journey_id: int, user_id: int) -> JourneyAnalysis:
         detail = await self.repository.get_detail(journey_id, user_id)
+        return await self._analyze_from_detail(
+            journey_id=journey_id,
+            user_id=user_id,
+            detail=detail,
+        )
+
+    async def analyze_trace(self, *, journey_id: int) -> JourneyAnalysis:
+        detail = await self.repository.get_detail_for_admin(journey_id)
+        return await self._analyze_from_detail(
+            journey_id=journey_id,
+            user_id=None,
+            detail=detail,
+        )
+
+    async def _analyze_from_detail(
+        self,
+        *,
+        journey_id: int,
+        user_id: int | None,
+        detail: JourneyDetail | None,
+    ) -> JourneyAnalysis:
         if detail is None:
             raise JourneyNotFoundError("Journey not found")
         if detail.journey.status != "finished":

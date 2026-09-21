@@ -27,14 +27,17 @@ class JourneyORM(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(
+    user_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("users.id", ondelete="RESTRICT"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="started")
     profile: Mapped[str] = mapped_column(String(30), nullable=False, default="car")
+    source_service: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    source_client_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    source_ride_id: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
     start_location: Mapped[object] = mapped_column(
         Geometry("POINT", srid=4326),
         nullable=False,

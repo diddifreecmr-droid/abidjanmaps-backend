@@ -28,6 +28,7 @@ from app.modules.journeys.infrastructure.persistence.journey_repository import (
     SQLAlchemyJourneyRepository,
 )
 from app.modules.journeys.presentation.schemas import (
+    DiddiGoJourneyStartSchema,
     JourneyDetailReadSchema,
     JourneyFinishSchema,
     JourneyAnalysisReadSchema,
@@ -40,6 +41,10 @@ from app.modules.journeys.presentation.schemas import (
     MapTraceInsightReadSchema,
     MapTraceInsightReviewQueueItemSchema,
     MapTraceInsightReviewSchema,
+)
+from app.modules.integrations.presentation.auth import (
+    ServiceClient,
+    require_diddigo_service_client,
 )
 from app.modules.map_data.infrastructure.persistence.road_repository import (
     SQLAlchemyRoadRepository,
@@ -91,6 +96,9 @@ def _journey_response(journey: Journey) -> JourneyReadSchema:
         user_id=journey.user_id,
         status=journey.status,
         profile=journey.profile,
+        source_service=journey.source_service,
+        source_client_id=journey.source_client_id,
+        source_ride_id=journey.source_ride_id,
         start=journey.start_location,
         end=journey.end_location,
         planned_distance_m=journey.planned_distance_m,
@@ -125,6 +133,23 @@ def _detail_response(detail: JourneyDetail) -> JourneyDetailReadSchema:
         **journey.model_dump(),
         positions=[_position_response(position) for position in detail.positions],
     )
+
+
+async def _require_diddigo_trace(
+    trace_id: int,
+    service_client: ServiceClient,
+    service: JourneyService,
+) -> JourneyDetail:
+    try:
+        detail = await service.get_trace_detail_for_admin(trace_id=trace_id)
+    except JourneyNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if (
+        detail.journey.source_service != "diddigo"
+        or detail.journey.source_client_id != service_client.client_id
+    ):
+        raise HTTPException(status_code=404, detail="Map trace not found")
+    return detail
 
 
 def _analysis_response(analysis: JourneyAnalysis) -> JourneyAnalysisReadSchema:
@@ -347,6 +372,34 @@ async def start_journey(
 
 
 @router.post(
+    "/integrations/diddigo/map-traces/start",
+    response_model=JourneyReadSchema,
+    status_code=201,
+    tags=["integrations"],
+)
+async def start_diddigo_trace(
+    payload: DiddiGoJourneyStartSchema,
+    service_client: ServiceClient = Depends(require_diddigo_service_client),
+    service: JourneyService = Depends(get_journey_service),
+) -> JourneyReadSchema:
+    journey = await service.start_journey(
+        Journey(
+            user_id=None,
+            source_service=service_client.service_name,
+            source_client_id=service_client.client_id,
+            source_ride_id=payload.source_ride_id,
+            profile=payload.profile,
+            start_location=payload.start.model_dump(),
+            end_location=payload.end.model_dump(),
+            planned_distance_m=payload.planned_distance_m,
+            planned_duration_s=payload.planned_duration_s,
+            planned_route_geometry=payload.planned_route_geometry,
+        )
+    )
+    return _journey_response(journey)
+
+
+@router.post(
     "/journeys/{trace_id}/positions",
     response_model=list[JourneyPositionReadSchema],
     status_code=201,
@@ -369,6 +422,40 @@ async def add_journey_positions(
         positions = await service.add_positions(
             journey_id=trace_id,
             user_id=current_user.id,
+            positions=[
+                JourneyPosition(
+                    journey_id=trace_id,
+                    location={"lat": item.lat, "lng": item.lng},
+                    accuracy_m=item.accuracy_m,
+                    speed_mps=item.speed_mps,
+                    recorded_at=item.recorded_at,
+                )
+                for item in payload.positions
+            ],
+        )
+    except JourneyNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except JourneyNotStartedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return [_position_response(position) for position in positions]
+
+
+@router.post(
+    "/integrations/diddigo/map-traces/{trace_id}/positions",
+    response_model=list[JourneyPositionReadSchema],
+    status_code=201,
+    tags=["integrations"],
+)
+async def add_diddigo_trace_positions(
+    trace_id: int,
+    payload: JourneyPositionsBatchSchema,
+    service_client: ServiceClient = Depends(require_diddigo_service_client),
+    service: JourneyService = Depends(get_journey_service),
+) -> list[JourneyPositionReadSchema]:
+    await _require_diddigo_trace(trace_id, service_client, service)
+    try:
+        positions = await service.add_positions_to_trace(
+            journey_id=trace_id,
             positions=[
                 JourneyPosition(
                     journey_id=trace_id,
@@ -414,6 +501,30 @@ async def finish_journey(
     return _journey_response(journey)
 
 
+@router.post(
+    "/integrations/diddigo/map-traces/{trace_id}/finish",
+    response_model=JourneyReadSchema,
+    tags=["integrations"],
+)
+async def finish_diddigo_trace(
+    trace_id: int,
+    payload: JourneyFinishSchema | None = None,
+    service_client: ServiceClient = Depends(require_diddigo_service_client),
+    service: JourneyService = Depends(get_journey_service),
+) -> JourneyReadSchema:
+    await _require_diddigo_trace(trace_id, service_client, service)
+    try:
+        journey = await service.finish_trace(
+            journey_id=trace_id,
+            finished_at=(payload or JourneyFinishSchema()).finished_at,
+        )
+    except JourneyNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except JourneyNotStartedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return _journey_response(journey)
+
+
 @router.get(
     "/journeys/{trace_id}",
     response_model=JourneyDetailReadSchema,
@@ -449,6 +560,26 @@ async def analyze_journey(
         raise HTTPException(status_code=401, detail="Authentication required")
     try:
         analysis = await service.analyze_journey(journey_id=trace_id, user_id=current_user.id)
+    except JourneyNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except JourneyNotFinishedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return _analysis_response(analysis)
+
+
+@router.post(
+    "/integrations/diddigo/map-traces/{trace_id}/analyze",
+    response_model=JourneyAnalysisReadSchema,
+    tags=["integrations"],
+)
+async def analyze_diddigo_trace(
+    trace_id: int,
+    service_client: ServiceClient = Depends(require_diddigo_service_client),
+    service: JourneyService = Depends(get_journey_service),
+) -> JourneyAnalysisReadSchema:
+    await _require_diddigo_trace(trace_id, service_client, service)
+    try:
+        analysis = await service.analyze_trace(journey_id=trace_id)
     except JourneyNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except JourneyNotFinishedError as exc:

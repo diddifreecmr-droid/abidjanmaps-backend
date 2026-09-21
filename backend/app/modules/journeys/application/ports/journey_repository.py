@@ -24,7 +24,7 @@ class JourneyRepository(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def get_detail(self, journey_id: int, user_id: int) -> JourneyDetail | None:
+    async def get_detail(self, journey_id: int, user_id: int | None) -> JourneyDetail | None:
         raise NotImplementedError
 
     @abstractmethod
@@ -39,7 +39,7 @@ class JourneyRepository(ABC):
     async def finish(
         self,
         journey_id: int,
-        user_id: int,
+        user_id: int | None,
         *,
         finished_at: datetime,
         actual_distance_m: float,
@@ -51,7 +51,7 @@ class JourneyRepository(ABC):
     async def save_analysis(
         self,
         journey_id: int,
-        user_id: int,
+        user_id: int | None,
         analysis: JourneyAnalysis,
     ) -> JourneyAnalysis | None:
         raise NotImplementedError
@@ -60,7 +60,7 @@ class JourneyRepository(ABC):
     async def get_analysis(
         self,
         journey_id: int,
-        user_id: int,
+        user_id: int | None,
     ) -> JourneyAnalysis | None:
         raise NotImplementedError
 

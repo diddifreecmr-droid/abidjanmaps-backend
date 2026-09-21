@@ -10,11 +10,14 @@ MAP_TRACE_INSIGHT_STATUSES = frozenset({"proposed", "validated", "rejected"})
 @dataclass(frozen=True, kw_only=True)
 class Journey:
     id: int | None = None
-    user_id: int
+    user_id: int | None
     status: str = "started"
     profile: str = "car"
     start_location: dict[str, float]
     end_location: dict[str, float]
+    source_service: str | None = None
+    source_client_id: str | None = None
+    source_ride_id: str | None = None
     planned_distance_m: int | None = None
     planned_duration_s: int | None = None
     planned_route_geometry: dict[str, Any] | None = None

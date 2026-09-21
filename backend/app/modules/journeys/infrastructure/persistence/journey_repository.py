@@ -32,6 +32,9 @@ class SQLAlchemyJourneyRepository(JourneyRepository):
             user_id=journey.user_id,
             status=journey.status,
             profile=journey.profile,
+            source_service=journey.source_service,
+            source_client_id=journey.source_client_id,
+            source_ride_id=journey.source_ride_id,
             start_location=point_to_wkt(journey.start_location),
             end_location=point_to_wkt(journey.end_location),
             planned_distance_m=journey.planned_distance_m,
@@ -69,7 +72,7 @@ class SQLAlchemyJourneyRepository(JourneyRepository):
             await self.session.refresh(item)
         return [await self._position_to_domain(item) for item in items]
 
-    async def get_detail(self, journey_id: int, user_id: int) -> JourneyDetail | None:
+    async def get_detail(self, journey_id: int, user_id: int | None) -> JourneyDetail | None:
         journey = await self._get_orm(journey_id, user_id=user_id)
         return await self._detail_from_orm(journey, journey_id)
 
@@ -108,7 +111,7 @@ class SQLAlchemyJourneyRepository(JourneyRepository):
     async def finish(
         self,
         journey_id: int,
-        user_id: int,
+        user_id: int | None,
         *,
         finished_at: datetime,
         actual_distance_m: float,
@@ -128,7 +131,7 @@ class SQLAlchemyJourneyRepository(JourneyRepository):
     async def save_analysis(
         self,
         journey_id: int,
-        user_id: int,
+        user_id: int | None,
         analysis: JourneyAnalysis,
     ) -> JourneyAnalysis | None:
         journey = await self._get_orm(journey_id, user_id=user_id)
@@ -171,7 +174,7 @@ class SQLAlchemyJourneyRepository(JourneyRepository):
     async def get_analysis(
         self,
         journey_id: int,
-        user_id: int,
+        user_id: int | None,
     ) -> JourneyAnalysis | None:
         journey = await self._get_orm(journey_id, user_id=user_id)
         if journey is None:
@@ -347,6 +350,9 @@ class SQLAlchemyJourneyRepository(JourneyRepository):
             user_id=journey.user_id,
             status=journey.status,
             profile=journey.profile,
+            source_service=journey.source_service,
+            source_client_id=journey.source_client_id,
+            source_ride_id=journey.source_ride_id,
             start_location=geojson_point_to_location(start_geojson) or {"lng": 0, "lat": 0},
             end_location=geojson_point_to_location(end_geojson) or {"lng": 0, "lat": 0},
             planned_distance_m=journey.planned_distance_m,

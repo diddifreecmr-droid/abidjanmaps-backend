@@ -21,6 +21,10 @@ class JourneyStartSchema(BaseModel):
         return normalize_vehicle_profile(value)
 
 
+class DiddiGoJourneyStartSchema(JourneyStartSchema):
+    source_ride_id: str = Field(..., min_length=1, max_length=80)
+
+
 class JourneyPositionCreateSchema(BaseModel):
     lat: float = Field(..., ge=-90, le=90)
     lng: float = Field(..., ge=-180, le=180)
@@ -49,9 +53,12 @@ class JourneyPositionReadSchema(BaseModel):
 
 class JourneyReadSchema(BaseModel):
     id: int
-    user_id: int
+    user_id: int | None
     status: str
     profile: str
+    source_service: str | None = None
+    source_client_id: str | None = None
+    source_ride_id: str | None = None
     start: GeoPointSchema
     end: GeoPointSchema
     planned_distance_m: int | None = None

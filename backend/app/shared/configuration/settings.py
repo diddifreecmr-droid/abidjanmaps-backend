@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     auth_secret_key: str = "dev-only-change-this-secret-before-deployment"
     auth_token_expire_minutes: int = 480
     auth_algorithm: str = "HS256"
+    diddigo_service_client_id: str | None = None
+    diddigo_service_token_sha256: str | None = None
     coverage_min_lat: float = 5.0
     coverage_max_lat: float = 6.0
     coverage_min_lng: float = -5.0

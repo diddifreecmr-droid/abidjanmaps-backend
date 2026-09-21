@@ -116,6 +116,8 @@ POSTGRES_DB=mapdb
 POSTGRES_USER=mapuser
 POSTGRES_PASSWORD=mot-de-passe-fort
 AUTH_SECRET_KEY=long-secret-aleatoire
+DIDDIGO_SERVICE_CLIENT_ID=diddigo-staging
+DIDDIGO_SERVICE_TOKEN_SHA256=hash-sha256-du-token-diddigo
 OSRM_DATA_PATH=/opt/abidjanmaps/osrm
 BACKEND_PORT=8001
 OSRM_PORT=5000
@@ -125,6 +127,8 @@ POSTGRES_PORT=5432
 Notes:
 
 - `AUTH_SECRET_KEY` doit etre different par environnement.
+- `DIDDIGO_SERVICE_TOKEN_SHA256` est le hash du token service DiddiGo; le token
+  brut doit rester uniquement dans la stack DiddiGo (`DIDDIMAP_SERVICE_TOKEN`).
 - `POSTGRES_PASSWORD` doit etre fort et non commite dans Git.
 - `BACKEND_PORT` doit etre libre sur le VPS.
 - Si le port `8000` est deja occupe, utiliser `8001`, `8002` ou un autre port

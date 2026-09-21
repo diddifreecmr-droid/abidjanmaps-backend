@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 from datetime import datetime, timezone
 
 from fastapi.testclient import TestClient
@@ -20,6 +21,7 @@ from app.modules.journeys.presentation.api import get_journey_service
 from app.modules.local_enrichment.domain.entities.route_report import RouteReport
 from app.modules.users.domain.entities.user import User
 from app.modules.users.presentation.dependencies import get_current_user
+from app.shared.configuration.settings import settings
 
 
 client = TestClient(app)
@@ -51,6 +53,9 @@ class FakeJourneyService:
             user_id=journey.user_id,
             status="started",
             profile=journey.profile,
+            source_service=journey.source_service,
+            source_client_id=journey.source_client_id,
+            source_ride_id=journey.source_ride_id,
             start_location=journey.start_location,
             end_location=journey.end_location,
             planned_distance_m=journey.planned_distance_m,
@@ -79,6 +84,18 @@ class FakeJourneyService:
         ]
         return self.positions
 
+    async def add_positions_to_trace(
+        self,
+        *,
+        journey_id: int,
+        positions: list[JourneyPosition],
+    ) -> list[JourneyPosition]:
+        return await self.add_positions(
+            journey_id=journey_id,
+            user_id=0,
+            positions=positions,
+        )
+
     async def finish_journey(
         self,
         *,
@@ -99,6 +116,28 @@ class FakeJourneyService:
             finished_at=finished_at,
         )
 
+    async def finish_trace(
+        self,
+        *,
+        journey_id: int,
+        finished_at: datetime | None = None,
+    ) -> Journey:
+        return Journey(
+            id=journey_id,
+            user_id=None,
+            status="finished",
+            profile="car",
+            source_service="diddigo",
+            source_client_id="diddigo-staging",
+            source_ride_id="ride-123",
+            start_location={"lng": -4.02, "lat": 5.33},
+            end_location={"lng": -3.99, "lat": 5.34},
+            actual_distance_m=1200.5,
+            actual_duration_s=900,
+            started_at=datetime(2026, 7, 27, 10, 0, tzinfo=timezone.utc),
+            finished_at=finished_at,
+        )
+
     async def get_journey(self, *, journey_id: int, user_id: int) -> JourneyDetail:
         return JourneyDetail(
             journey=Journey(
@@ -106,6 +145,9 @@ class FakeJourneyService:
                 user_id=user_id,
                 status="started",
                 profile="car",
+                source_service="diddigo" if user_id == 0 else None,
+                source_client_id="diddigo-staging" if user_id == 0 else None,
+                source_ride_id="ride-123" if user_id == 0 else None,
                 start_location={"lng": -4.02, "lat": 5.33},
                 end_location={"lng": -3.99, "lat": 5.34},
             ),
@@ -113,7 +155,7 @@ class FakeJourneyService:
         )
 
     async def get_trace_detail_for_admin(self, *, trace_id: int) -> JourneyDetail:
-        return await self.get_journey(journey_id=trace_id, user_id=42)
+        return await self.get_journey(journey_id=trace_id, user_id=0)
 
     async def list_journeys(self, *, user_id: int) -> list[Journey]:
         return [
@@ -162,6 +204,9 @@ class FakeJourneyService:
 
     async def get_analysis(self, *, journey_id: int, user_id: int) -> JourneyAnalysis:
         return await self.analyze_journey(journey_id=journey_id, user_id=user_id)
+
+    async def analyze_trace(self, *, journey_id: int) -> JourneyAnalysis:
+        return await self.analyze_journey(journey_id=journey_id, user_id=0)
 
     async def list_insights(
         self,
@@ -382,6 +427,90 @@ def test_journey_collection_workflow() -> None:
     get_analysis_response = client.get("/api/v1/map-traces/1/analysis")
     assert get_analysis_response.status_code == 200
     assert get_analysis_response.json()["average_speed_kmh"] == 4.8
+
+
+def _service_headers(token: str = "service-secret") -> dict[str, str]:
+    return {
+        "Authorization": f"Bearer {token}",
+        "X-Client-ID": "diddigo-staging",
+    }
+
+
+def test_diddigo_trace_start_requires_service_auth() -> None:
+    response = client.post(
+        "/api/v1/integrations/diddigo/map-traces/start",
+        json={
+            "source_ride_id": "ride-123",
+            "start": {"lng": -4.02, "lat": 5.33},
+            "end": {"lng": -3.99, "lat": 5.34},
+            "profile": "car",
+        },
+    )
+
+    assert response.status_code == 401
+
+
+def test_diddigo_trace_workflow_uses_service_auth_and_ride_source(monkeypatch) -> None:
+    token = "service-secret"
+    monkeypatch.setattr(settings, "diddigo_service_client_id", "diddigo-staging")
+    monkeypatch.setattr(
+        settings,
+        "diddigo_service_token_sha256",
+        hashlib.sha256(token.encode("utf-8")).hexdigest(),
+    )
+    service = FakeJourneyService()
+    app.dependency_overrides[get_journey_service] = lambda: service
+
+    start_response = client.post(
+        "/api/v1/integrations/diddigo/map-traces/start",
+        headers=_service_headers(token),
+        json={
+            "source_ride_id": "ride-123",
+            "start": {"lng": -4.02, "lat": 5.33},
+            "end": {"lng": -3.99, "lat": 5.34},
+            "profile": "car",
+            "planned_distance_m": 1500,
+            "planned_duration_s": 360,
+        },
+    )
+    assert start_response.status_code == 201
+    assert start_response.json()["user_id"] is None
+    assert start_response.json()["source_service"] == "diddigo"
+    assert start_response.json()["source_client_id"] == "diddigo-staging"
+    assert start_response.json()["source_ride_id"] == "ride-123"
+
+    positions_response = client.post(
+        "/api/v1/integrations/diddigo/map-traces/1/positions",
+        headers=_service_headers(token),
+        json={
+            "positions": [
+                {
+                    "lng": -4.019,
+                    "lat": 5.331,
+                    "accuracy_m": 8,
+                    "speed_mps": 6.2,
+                    "recorded_at": "2026-07-27T10:01:00Z",
+                }
+            ]
+        },
+    )
+    assert positions_response.status_code == 201
+    assert positions_response.json()[0]["trace_id"] == 1
+
+    finish_response = client.post(
+        "/api/v1/integrations/diddigo/map-traces/1/finish",
+        headers=_service_headers(token),
+        json={"finished_at": "2026-07-27T10:15:00Z"},
+    )
+    assert finish_response.status_code == 200
+    assert finish_response.json()["source_ride_id"] == "ride-123"
+
+    analysis_response = client.post(
+        "/api/v1/integrations/diddigo/map-traces/1/analyze",
+        headers=_service_headers(token),
+    )
+    assert analysis_response.status_code == 200
+    assert analysis_response.json()["trace_id"] == 1
 
 
 def test_map_trace_insight_admin_workflow() -> None:
