@@ -24,7 +24,10 @@ async def require_diddigo_service_client(
 ) -> ServiceClient:
     unauthorized = HTTPException(
         status_code=401,
-        detail="Service authentication required",
+        detail={
+            "code": "authentication_required",
+            "message": "Service authentication required",
+        },
         headers={"WWW-Authenticate": "Bearer"},
     )
     expected_client_id = settings.diddigo_service_client_id

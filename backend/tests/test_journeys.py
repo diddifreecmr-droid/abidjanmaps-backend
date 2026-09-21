@@ -624,6 +624,31 @@ def test_diddigo_positions_with_invalid_latitude_return_validation_error(monkeyp
     assert response.json()["details"][0]["field"] == "positions[0].lat"
 
 
+def test_diddigo_positions_without_service_auth_return_standard_error(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "diddigo_service_client_id", "diddigo-staging")
+    monkeypatch.setattr(settings, "diddigo_service_token_sha256", "expected-hash")
+    app.dependency_overrides[get_journey_service] = lambda: FakeJourneyService()
+
+    response = client.post(
+        "/api/v1/integrations/diddigo/map-traces/1/positions",
+        json={
+            "positions": [
+                {
+                    "lng": -4.019,
+                    "lat": 5.331,
+                    "recorded_at": "2026-07-27T10:16:00Z",
+                }
+            ]
+        },
+    )
+
+    body = response.json()
+    assert response.status_code == 401
+    assert body["status"] == "error"
+    assert body["code"] == "authentication_required"
+    assert body["message"] == "Service authentication required"
+
+
 def test_diddigo_analyze_before_finish_returns_business_conflict(monkeypatch) -> None:
     token = "service-secret"
     monkeypatch.setattr(settings, "diddigo_service_client_id", "diddigo-staging")
