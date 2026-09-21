@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -55,6 +57,7 @@ from app.shared.infrastructure.db import get_async_session
 
 
 router = APIRouter(tags=["map-traces"])
+logger = logging.getLogger("abidjanmaps.map_traces")
 
 CONVERTIBLE_INSIGHT_REPORT_TYPES = {
     "duration_much_longer_than_planned": "degraded",
@@ -73,6 +76,17 @@ INSIGHT_SORT_FIELDS = frozenset(
     }
 )
 INSIGHT_SORT_ORDERS = frozenset({"asc", "desc"})
+
+
+def _integration_error(status_code: int, code: str, message: str) -> HTTPException:
+    return HTTPException(
+        status_code=status_code,
+        detail={
+            "status": "error",
+            "code": code,
+            "message": message,
+        },
+    )
 
 
 def get_journey_service(
@@ -143,12 +157,12 @@ async def _require_diddigo_trace(
     try:
         detail = await service.get_trace_detail_for_admin(trace_id=trace_id)
     except JourneyNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise _integration_error(404, "trace_not_found", "Map trace not found") from exc
     if (
         detail.journey.source_service != "diddigo"
         or detail.journey.source_client_id != service_client.client_id
     ):
-        raise HTTPException(status_code=404, detail="Map trace not found")
+        raise _integration_error(404, "trace_not_found", "Map trace not found")
     return detail
 
 
@@ -396,6 +410,12 @@ async def start_diddigo_trace(
             planned_route_geometry=payload.planned_route_geometry,
         )
     )
+    logger.info(
+        "diddigo trace started trace_id=%s source_ride_id=%s source_client_id=%s",
+        journey.id,
+        journey.source_ride_id,
+        journey.source_client_id,
+    )
     return _journey_response(journey)
 
 
@@ -452,7 +472,7 @@ async def add_diddigo_trace_positions(
     service_client: ServiceClient = Depends(require_diddigo_service_client),
     service: JourneyService = Depends(get_journey_service),
 ) -> list[JourneyPositionReadSchema]:
-    await _require_diddigo_trace(trace_id, service_client, service)
+    detail = await _require_diddigo_trace(trace_id, service_client, service)
     try:
         positions = await service.add_positions_to_trace(
             journey_id=trace_id,
@@ -468,9 +488,25 @@ async def add_diddigo_trace_positions(
             ],
         )
     except JourneyNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise _integration_error(404, "trace_not_found", "Map trace not found") from exc
     except JourneyNotStartedError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        if detail.journey.status == "finished":
+            raise _integration_error(
+                409,
+                "trace_already_finished",
+                "Map trace is already finished and no longer accepts positions",
+            ) from exc
+        raise _integration_error(
+            409,
+            "trace_not_accepting_positions",
+            "Map trace is not accepting positions",
+        ) from exc
+    logger.info(
+        "diddigo trace positions accepted trace_id=%s source_ride_id=%s count=%s",
+        trace_id,
+        detail.journey.source_ride_id,
+        len(positions),
+    )
     return [_position_response(position) for position in positions]
 
 
@@ -512,16 +548,27 @@ async def finish_diddigo_trace(
     service_client: ServiceClient = Depends(require_diddigo_service_client),
     service: JourneyService = Depends(get_journey_service),
 ) -> JourneyReadSchema:
-    await _require_diddigo_trace(trace_id, service_client, service)
+    detail = await _require_diddigo_trace(trace_id, service_client, service)
     try:
         journey = await service.finish_trace(
             journey_id=trace_id,
             finished_at=(payload or JourneyFinishSchema()).finished_at,
         )
     except JourneyNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise _integration_error(404, "trace_not_found", "Map trace not found") from exc
     except JourneyNotStartedError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise _integration_error(
+            409,
+            "trace_not_started",
+            "Map trace cannot be finished because it is not started",
+        ) from exc
+    logger.info(
+        "diddigo trace finished trace_id=%s source_ride_id=%s status=%s positions_count=%s",
+        trace_id,
+        detail.journey.source_ride_id,
+        journey.status,
+        len(detail.positions),
+    )
     return _journey_response(journey)
 
 
@@ -577,13 +624,27 @@ async def analyze_diddigo_trace(
     service_client: ServiceClient = Depends(require_diddigo_service_client),
     service: JourneyService = Depends(get_journey_service),
 ) -> JourneyAnalysisReadSchema:
-    await _require_diddigo_trace(trace_id, service_client, service)
+    detail = await _require_diddigo_trace(trace_id, service_client, service)
     try:
         analysis = await service.analyze_trace(journey_id=trace_id)
     except JourneyNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise _integration_error(404, "trace_not_found", "Map trace not found") from exc
     except JourneyNotFinishedError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise _integration_error(
+            409,
+            "trace_not_finished",
+            "Map trace must be finished before analysis",
+        ) from exc
+    logger.info(
+        "diddigo trace analyzed trace_id=%s source_ride_id=%s recommendation=%s "
+        "quality_label=%s points_count=%s usable_points_count=%s",
+        trace_id,
+        detail.journey.source_ride_id,
+        analysis.recommendation,
+        analysis.quality_label,
+        analysis.points_count,
+        analysis.usable_points_count,
+    )
     return _analysis_response(analysis)
 
 

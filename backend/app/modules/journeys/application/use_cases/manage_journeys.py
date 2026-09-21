@@ -116,6 +116,8 @@ class JourneyService:
     ) -> Journey:
         if detail is None:
             raise JourneyNotFoundError("Journey not found")
+        if detail.journey.status == "finished":
+            return detail.journey
         if detail.journey.status != "started":
             raise JourneyNotStartedError("Journey is not started")
 

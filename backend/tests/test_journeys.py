@@ -6,7 +6,11 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.modules.journeys.presentation import api as journeys_api
-from app.modules.journeys.application.use_cases.manage_journeys import JourneyService
+from app.modules.journeys.application.use_cases.manage_journeys import (
+    JourneyNotFinishedError,
+    JourneyNotStartedError,
+    JourneyService,
+)
 from app.modules.journeys.domain.entities.journey import (
     Journey,
     JourneyAnalysis,
@@ -343,6 +347,41 @@ class QueueFakeJourneyService(FakeJourneyService):
         return filtered
 
 
+class FinishedDiddiGoTraceService(FakeJourneyService):
+    async def get_trace_detail_for_admin(self, *, trace_id: int) -> JourneyDetail:
+        return JourneyDetail(
+            journey=Journey(
+                id=trace_id,
+                user_id=None,
+                status="finished",
+                profile="car",
+                source_service="diddigo",
+                source_client_id="diddigo-staging",
+                source_ride_id="ride-123",
+                start_location={"lng": -4.02, "lat": 5.33},
+                end_location={"lng": -3.99, "lat": 5.34},
+                actual_distance_m=1200.5,
+                actual_duration_s=900,
+                started_at=datetime(2026, 7, 27, 10, 0, tzinfo=timezone.utc),
+                finished_at=datetime(2026, 7, 27, 10, 15, tzinfo=timezone.utc),
+            ),
+            positions=[],
+        )
+
+    async def add_positions_to_trace(
+        self,
+        *,
+        journey_id: int,
+        positions: list[JourneyPosition],
+    ) -> list[JourneyPosition]:
+        raise JourneyNotStartedError("Journey is not accepting positions")
+
+
+class UnfinishedDiddiGoTraceService(FakeJourneyService):
+    async def analyze_trace(self, *, journey_id: int) -> JourneyAnalysis:
+        raise JourneyNotFinishedError("Journey must be finished before analysis")
+
+
 def test_journey_start_requires_authentication() -> None:
     response = client.post(
         "/api/v1/map-traces/start",
@@ -505,12 +544,74 @@ def test_diddigo_trace_workflow_uses_service_auth_and_ride_source(monkeypatch) -
     assert finish_response.status_code == 200
     assert finish_response.json()["source_ride_id"] == "ride-123"
 
+    retry_finish_response = client.post(
+        "/api/v1/integrations/diddigo/map-traces/1/finish",
+        headers=_service_headers(token),
+        json={"finished_at": "2026-07-27T10:15:00Z"},
+    )
+    assert retry_finish_response.status_code == 200
+    assert retry_finish_response.json()["status"] == "finished"
+
     analysis_response = client.post(
         "/api/v1/integrations/diddigo/map-traces/1/analyze",
         headers=_service_headers(token),
     )
     assert analysis_response.status_code == 200
     assert analysis_response.json()["trace_id"] == 1
+
+    retry_analysis_response = client.post(
+        "/api/v1/integrations/diddigo/map-traces/1/analyze",
+        headers=_service_headers(token),
+    )
+    assert retry_analysis_response.status_code == 200
+    assert retry_analysis_response.json()["trace_id"] == 1
+
+
+def test_diddigo_positions_after_finish_return_business_conflict(monkeypatch) -> None:
+    token = "service-secret"
+    monkeypatch.setattr(settings, "diddigo_service_client_id", "diddigo-staging")
+    monkeypatch.setattr(
+        settings,
+        "diddigo_service_token_sha256",
+        hashlib.sha256(token.encode("utf-8")).hexdigest(),
+    )
+    app.dependency_overrides[get_journey_service] = lambda: FinishedDiddiGoTraceService()
+
+    response = client.post(
+        "/api/v1/integrations/diddigo/map-traces/1/positions",
+        headers=_service_headers(token),
+        json={
+            "positions": [
+                {
+                    "lng": -4.019,
+                    "lat": 5.331,
+                    "recorded_at": "2026-07-27T10:16:00Z",
+                }
+            ]
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "trace_already_finished"
+
+
+def test_diddigo_analyze_before_finish_returns_business_conflict(monkeypatch) -> None:
+    token = "service-secret"
+    monkeypatch.setattr(settings, "diddigo_service_client_id", "diddigo-staging")
+    monkeypatch.setattr(
+        settings,
+        "diddigo_service_token_sha256",
+        hashlib.sha256(token.encode("utf-8")).hexdigest(),
+    )
+    app.dependency_overrides[get_journey_service] = lambda: UnfinishedDiddiGoTraceService()
+
+    response = client.post(
+        "/api/v1/integrations/diddigo/map-traces/1/analyze",
+        headers=_service_headers(token),
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "trace_not_finished"
 
 
 def test_map_trace_insight_admin_workflow() -> None:
@@ -612,6 +713,102 @@ def test_validated_map_trace_insight_can_convert_to_route_report(monkeypatch) ->
     assert body["route_report"]["extra_metadata"]["source"] == "map_trace_insight"
     assert body["route_report"]["extra_metadata"]["evidence_count"] == 3
     assert body["route_report"]["extra_metadata"]["latest_evidence_trace_id"] == 4
+
+
+def test_journey_service_finish_is_idempotent_for_finished_trace() -> None:
+    class FakeRepository:
+        def __init__(self) -> None:
+            self.finish_called = False
+
+        async def create(self, journey: Journey) -> Journey:
+            return journey
+
+        async def add_positions(self, journey_id: int, positions: list[JourneyPosition]):
+            return positions
+
+        async def get_detail(self, journey_id: int, user_id: int):
+            return JourneyDetail(
+                journey=Journey(
+                    id=journey_id,
+                    user_id=user_id,
+                    status="finished",
+                    profile="car",
+                    start_location={"lng": -4.02, "lat": 5.33},
+                    end_location={"lng": -3.99, "lat": 5.34},
+                    actual_distance_m=1200.5,
+                    actual_duration_s=900,
+                    started_at=datetime(2026, 7, 27, 10, 0, tzinfo=timezone.utc),
+                    finished_at=datetime(2026, 7, 27, 10, 15, tzinfo=timezone.utc),
+                ),
+                positions=[],
+            )
+
+        async def get_detail_for_admin(self, journey_id: int):
+            return await self.get_detail(journey_id, None)
+
+        async def list_for_user(self, user_id: int):
+            return []
+
+        async def finish(
+            self,
+            journey_id: int,
+            user_id: int | None,
+            *,
+            finished_at: datetime,
+            actual_distance_m: float,
+            actual_duration_s: int,
+        ):
+            self.finish_called = True
+            return None
+
+        async def save_analysis(self, journey_id: int, user_id: int, analysis: JourneyAnalysis):
+            return analysis
+
+        async def get_analysis(self, journey_id: int, user_id: int):
+            return None
+
+        async def replace_proposed_insights(
+            self,
+            analysis_id: int,
+            insights: list[MapTraceInsight],
+        ):
+            return insights
+
+        async def list_insights(
+            self,
+            status: str | None = None,
+            insight_type: str | None = None,
+            severity_min: int | None = None,
+            trace_id: int | None = None,
+        ):
+            return []
+
+        async def get_insight(self, insight_id: int):
+            return None
+
+        async def review_insight(
+            self,
+            insight_id: int,
+            *,
+            status: str,
+            reviewed_by: int,
+            review_note: str | None,
+            reviewed_at: datetime,
+        ):
+            return None
+
+    repository = FakeRepository()
+
+    journey = asyncio.run(
+        JourneyService(repository).finish_trace(
+            journey_id=1,
+            finished_at=datetime(2026, 7, 27, 10, 20, tzinfo=timezone.utc),
+        )
+    )
+
+    assert journey.status == "finished"
+    assert journey.finished_at == datetime(2026, 7, 27, 10, 15, tzinfo=timezone.utc)
+    assert repository.finish_called is False
 
 
 def test_journey_service_computes_actual_summary() -> None:

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from app.shared.domain.exceptions import (
@@ -63,6 +63,22 @@ def _validation_message(details: list[dict[str, str]]) -> str:
 
 
 def register_exception_handlers(app: FastAPI) -> None:
+    @app.exception_handler(HTTPException)
+    async def http_exception_handler(_: Request, exc: HTTPException) -> JSONResponse:
+        if isinstance(exc.detail, dict) and {"code", "message"}.issubset(exc.detail):
+            content = dict(exc.detail)
+            content.setdefault("status", "error")
+            return JSONResponse(
+                status_code=exc.status_code,
+                content=content,
+                headers=exc.headers,
+            )
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail},
+            headers=exc.headers,
+        )
+
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(_: Request, exc: RequestValidationError) -> JSONResponse:
         details = _format_validation_errors(exc)
