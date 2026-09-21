@@ -296,8 +296,8 @@ class FakePlaceRepository:
         self.__class__.next_id += 1
         return item
 
-    async def list_all(self):
-        return list(self.__class__.store)
+    async def list_all(self, *, limit: int):
+        return list(self.__class__.store)[:limit]
 
     async def search(
         self,
@@ -619,11 +619,16 @@ def test_list_places() -> None:
             "extra_metadata": {"district": "Yopougon"},
         },
     )
-    response = client.get("/api/v1/places")
+    response = client.get("/api/v1/places?limit=20")
     assert response.status_code == 200
     assert len(response.json()) == 1
     assert response.json()[0]["name"] == "Carrefour Anador"
     assert response.json()[0]["location"] == {"lng": -4.0, "lat": 5.3}
+
+
+def test_list_places_requires_limit() -> None:
+    response = client.get("/api/v1/places")
+    assert response.status_code == 422
 
 
 def test_search_roads_by_name() -> None:
@@ -758,7 +763,7 @@ def test_geocoding_autocomplete_returns_frontend_friendly_contract() -> None:
 def test_geocoding_autocomplete_requires_two_characters() -> None:
     response = client.get("/api/v1/geocoding/autocomplete?q=A")
 
-    assert response.status_code == 400
+    assert response.status_code == 422
 
 
 def test_geocoding_autocomplete_requires_complete_bias() -> None:
@@ -957,7 +962,7 @@ def test_patch_rejects_payload_without_business_change() -> None:
         "/api/v1/roads/999",
         json={"note": "No business change"},
     )
-    assert response.status_code == 400
+    assert response.status_code == 422
 
 
 def test_route_proposals_detail_includes_enrichment() -> None:

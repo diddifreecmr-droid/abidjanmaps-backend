@@ -9,11 +9,13 @@ from app.modules.routing.presentation.proposal_api import router as route_propos
 from app.modules.routing.presentation.route_api import router as route_router
 from app.modules.users.presentation.api import router as users_router
 from app.shared.presentation.db_health_api import router as db_health_router
+from app.shared.presentation.error_catalog_api import router as error_catalog_router
 from app.shared.presentation.health_api import router as health_router
 
 router = APIRouter()
 router.include_router(health_router)
 router.include_router(db_health_router)
+router.include_router(error_catalog_router)
 router.include_router(users_router)
 router.include_router(journeys_router)
 router.include_router(geocoding_router)

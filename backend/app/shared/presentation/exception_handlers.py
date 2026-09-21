@@ -62,6 +62,12 @@ def _validation_message(details: list[dict[str, str]]) -> str:
     return "Invalid request body. Check the details field."
 
 
+def _validation_status_and_code(details: list[dict[str, str]]) -> tuple[int, str]:
+    if any(detail["type"] == "json_invalid" for detail in details):
+        return 400, "invalid_request"
+    return 422, "validation_error"
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(HTTPException)
     async def http_exception_handler(_: Request, exc: HTTPException) -> JSONResponse:
@@ -82,11 +88,12 @@ def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(_: Request, exc: RequestValidationError) -> JSONResponse:
         details = _format_validation_errors(exc)
+        status_code, code = _validation_status_and_code(details)
         return JSONResponse(
-            status_code=400,
+            status_code=status_code,
             content={
                 "status": "error",
-                "code": "invalid_request",
+                "code": code,
                 "message": _validation_message(details),
                 "details": details,
             },

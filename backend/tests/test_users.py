@@ -201,7 +201,7 @@ def test_login_reports_missing_field() -> None:
     )
 
     body = response.json()
-    assert response.status_code == 400
-    assert body["code"] == "invalid_request"
+    assert response.status_code == 422
+    assert body["code"] == "validation_error"
     assert body["message"] == "Invalid field 'password': Field required"
     assert body["details"][0]["field"] == "password"

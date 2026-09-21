@@ -19,7 +19,7 @@ def test_health_endpoint() -> None:
     assert response.json()["status"] == "ok"
 
 
-def test_route_validation_returns_400_for_invalid_profile() -> None:
+def test_route_validation_returns_422_for_invalid_profile() -> None:
     response = client.post(
         "/api/v1/route",
         json={
@@ -28,8 +28,37 @@ def test_route_validation_returns_400_for_invalid_profile() -> None:
             "profile": "bicycle",
         },
     )
-    assert response.status_code == 400
-    assert response.json()["code"] == "invalid_request"
+    assert response.status_code == 422
+    assert response.json()["code"] == "validation_error"
+
+
+def test_route_validation_returns_422_for_invalid_latitude() -> None:
+    response = client.post(
+        "/api/v1/route",
+        json={
+            "start": {"lat": 999, "lng": -4.0267},
+            "end": {"lat": 5.3097, "lng": -3.9903},
+            "profile": "car",
+        },
+    )
+
+    body = response.json()
+    assert response.status_code == 422
+    assert body["code"] == "validation_error"
+    assert body["details"][0]["field"] == "start.lat"
+
+
+def test_error_catalog_endpoint_lists_public_errors() -> None:
+    response = client.get("/api/v1/errors/catalog")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ok"
+    assert body["service"] == "diddimap"
+    codes = {item["code"] for item in body["errors"]}
+    assert "validation_error" in codes
+    assert "trace_already_finished" in codes
+    assert "routing_engine_unavailable" in codes
 
 
 def test_french_motorcycle_alias_is_normalized() -> None:
