@@ -2,9 +2,11 @@ import asyncio
 import hashlib
 from datetime import datetime, timezone
 
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.modules.integrations.presentation import auth as integrations_auth
 from app.modules.journeys.presentation import api as journeys_api
 from app.modules.journeys.application.use_cases.manage_journeys import (
     JourneyNotFinishedError,
@@ -565,6 +567,139 @@ def test_diddigo_trace_workflow_uses_service_auth_and_ride_source(monkeypatch) -
     )
     assert retry_analysis_response.status_code == 200
     assert retry_analysis_response.json()["trace_id"] == 1
+
+
+def test_diddigo_trace_accepts_diddifreeid_service_token(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "identity_jwks_url", "https://identity.test/jwks.json")
+
+    def fake_decode_identity_service_token(
+        token: str,
+        *,
+        x_client_id: str,
+        required_scopes: frozenset[str],
+        expected_service_name: str | None = None,
+    ) -> integrations_auth.ServiceClient:
+        assert token == "identity-service-token"
+        assert x_client_id == "diddigo-staging"
+        assert required_scopes == frozenset({"diddimap:traces:write"})
+        assert expected_service_name == "diddigo"
+        return integrations_auth.ServiceClient(
+            client_id=x_client_id,
+            service_name="diddigo",
+            scopes=frozenset(
+                {
+                    "diddimap:routing:read",
+                    "diddimap:geocoding:read",
+                    "diddimap:traces:write",
+                }
+            ),
+        )
+
+    monkeypatch.setattr(
+        integrations_auth,
+        "decode_identity_service_token",
+        fake_decode_identity_service_token,
+    )
+    service = FakeJourneyService()
+    app.dependency_overrides[get_journey_service] = lambda: service
+
+    response = client.post(
+        "/api/v1/integrations/diddigo/map-traces/start",
+        headers={
+            "Authorization": "Bearer identity-service-token",
+            "X-Client-ID": "diddigo-staging",
+        },
+        json={
+            "source_ride_id": "ride-123",
+            "start": {"lng": -4.02, "lat": 5.33},
+            "end": {"lng": -3.99, "lat": 5.34},
+            "profile": "car",
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["source_service"] == "diddigo"
+    assert response.json()["source_client_id"] == "diddigo-staging"
+
+
+def test_diddigo_trace_keeps_legacy_token_while_identity_is_enabled(monkeypatch) -> None:
+    token = "service-secret"
+    monkeypatch.setattr(settings, "identity_jwks_url", "https://identity.test/jwks.json")
+    monkeypatch.setattr(settings, "diddigo_service_client_id", "diddigo-staging")
+    monkeypatch.setattr(
+        settings,
+        "diddigo_service_token_sha256",
+        hashlib.sha256(token.encode("utf-8")).hexdigest(),
+    )
+
+    def fake_decode_identity_service_token(*args, **kwargs) -> integrations_auth.ServiceClient:
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "code": "service_token_invalid",
+                "message": "Service token invalid",
+            },
+        )
+
+    monkeypatch.setattr(
+        integrations_auth,
+        "decode_identity_service_token",
+        fake_decode_identity_service_token,
+    )
+    app.dependency_overrides[get_journey_service] = lambda: FakeJourneyService()
+
+    response = client.post(
+        "/api/v1/integrations/diddigo/map-traces/start",
+        headers=_service_headers(token),
+        json={
+            "source_ride_id": "ride-123",
+            "start": {"lng": -4.02, "lat": 5.33},
+            "end": {"lng": -3.99, "lat": 5.34},
+            "profile": "car",
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["source_service"] == "diddigo"
+
+
+def test_diddigo_trace_rejects_identity_token_without_trace_scope(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "identity_jwks_url", "https://identity.test/jwks.json")
+    monkeypatch.setattr(settings, "diddigo_service_client_id", None)
+    monkeypatch.setattr(settings, "diddigo_service_token_sha256", None)
+
+    def fake_decode_identity_service_token(*args, **kwargs) -> integrations_auth.ServiceClient:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "service_scope_invalid",
+                "message": "Service token scope is insufficient",
+            },
+        )
+
+    monkeypatch.setattr(
+        integrations_auth,
+        "decode_identity_service_token",
+        fake_decode_identity_service_token,
+    )
+    app.dependency_overrides[get_journey_service] = lambda: FakeJourneyService()
+
+    response = client.post(
+        "/api/v1/integrations/diddigo/map-traces/start",
+        headers={
+            "Authorization": "Bearer identity-service-token",
+            "X-Client-ID": "diddigo-staging",
+        },
+        json={
+            "source_ride_id": "ride-123",
+            "start": {"lng": -4.02, "lat": 5.33},
+            "end": {"lng": -3.99, "lat": 5.34},
+            "profile": "car",
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "service_scope_invalid"
 
 
 def test_diddigo_positions_after_finish_return_business_conflict(monkeypatch) -> None:

@@ -27,6 +27,11 @@ Format standard:
 | --- | ---: | --- | --- |
 | `authentication_required` | 401 | Non | Token utilisateur ou service manquant/invalide. |
 | `forbidden` | 403 | Non | Role insuffisant. |
+| `service_token_invalid` | 401 | Non | Token service S2S invalide ou signe par une cle inconnue. |
+| `service_client_id_invalid` | 401 | Non | `X-Client-ID` ne correspond pas au token service. |
+| `service_token_inactive` | 403 | Non | Client service S2S inactif. |
+| `service_not_allowed` | 403 | Non | Service appelant non autorise sur cette integration. |
+| `service_scope_invalid` | 403 | Non | Scope S2S manquant, par exemple `diddimap:traces:write`. |
 
 ## Traces GPS
 

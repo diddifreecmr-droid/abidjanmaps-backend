@@ -43,6 +43,9 @@ services:
       AUTH_SECRET_KEY: ${AUTH_SECRET_KEY:-dev-only-change-this-secret-before-deployment}
       DIDDIGO_SERVICE_CLIENT_ID: ${DIDDIGO_SERVICE_CLIENT_ID:-}
       DIDDIGO_SERVICE_TOKEN_SHA256: ${DIDDIGO_SERVICE_TOKEN_SHA256:-}
+      IDENTITY_JWKS_URL: ${IDENTITY_JWKS_URL:-}
+      IDENTITY_ISSUER: ${IDENTITY_ISSUER:-diddifree-id}
+      DIDDIMAP_SERVICE_AUDIENCE: ${DIDDIMAP_SERVICE_AUDIENCE:-diddimap}
     command:
       - sh
       - -c

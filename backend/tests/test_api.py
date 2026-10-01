@@ -57,6 +57,7 @@ def test_error_catalog_endpoint_lists_public_errors() -> None:
     assert body["service"] == "diddimap"
     codes = {item["code"] for item in body["errors"]}
     assert "validation_error" in codes
+    assert "service_scope_invalid" in codes
     assert "trace_already_finished" in codes
     assert "routing_engine_unavailable" in codes
 
