@@ -3,7 +3,7 @@ uvicorn[standard]
 httpx
 pydantic-settings
 asyncpg
-sqlalchemy
+sqlalchemy[asyncio]
 geoalchemy2
 alembic
 PyJWT

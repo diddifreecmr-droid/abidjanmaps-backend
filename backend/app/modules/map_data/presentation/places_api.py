@@ -60,6 +60,21 @@ async def _place_response(place, session: AsyncSession) -> dict:
     }
 
 
+def _place_public_response(place: dict) -> dict:
+    return {
+        "id": place["id"],
+        "name": place["name"],
+        "category": place["category"],
+        "location": {"lng": place["lng"], "lat": place["lat"]},
+        "aliases": place["aliases"],
+        "vernacular_name": place.get("vernacular_name"),
+        "description": place["description"],
+        "verified": place["verified"],
+        "validation_status": place.get("validation_status", "proposed"),
+        "extra_metadata": place["extra_metadata"],
+    }
+
+
 @router.post("/places", response_model=PlaceReadSchema, status_code=201)
 async def create_place(
     payload: PlaceCreateSchema,
@@ -88,9 +103,14 @@ async def create_place(
 
 
 @router.get("/places")
-async def list_places(session: AsyncSession = Depends(get_async_session)) -> list[dict]:
+async def list_places(
+    limit: int = Query(..., ge=1, le=100),
+    session: AsyncSession = Depends(get_async_session),
+) -> list[dict]:
     repo = SQLAlchemyPlaceRepository(session)
-    places = await repo.list_all()
+    if hasattr(repo, "list_public"):
+        return [_place_public_response(place) for place in await repo.list_public(limit=limit)]
+    places = await repo.list_all(limit=limit)
     return [await _place_response(place, session) for place in places]
 
 

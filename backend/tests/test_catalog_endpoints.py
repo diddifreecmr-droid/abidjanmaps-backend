@@ -631,6 +631,45 @@ def test_list_places_requires_limit() -> None:
     assert response.status_code == 422
 
 
+def test_list_places_uses_public_listing_without_extra_geometry_query() -> None:
+    class FastPlaceRepository:
+        def __init__(self, session) -> None:
+            self.session = session
+
+        async def list_public(self, *, limit: int):
+            return [
+                {
+                    "id": 1,
+                    "name": "Carrefour Anador",
+                    "category": "landmark",
+                    "lng": -4.0,
+                    "lat": 5.3,
+                    "aliases": ["Anador"],
+                    "vernacular_name": None,
+                    "description": "Repere local",
+                    "verified": True,
+                    "validation_status": "validated",
+                    "extra_metadata": {"district": "Yopougon"},
+                }
+            ]
+
+    class FailingGeometrySession:
+        async def scalar(self, statement):
+            raise AssertionError("list_places should not run one geometry query per place")
+
+    app.dependency_overrides[places_module.get_async_session] = lambda: FailingGeometrySession()
+    original_repository = places_module.SQLAlchemyPlaceRepository
+    places_module.SQLAlchemyPlaceRepository = FastPlaceRepository
+    try:
+        response = client.get("/api/v1/places?limit=20")
+    finally:
+        app.dependency_overrides.clear()
+        places_module.SQLAlchemyPlaceRepository = original_repository
+
+    assert response.status_code == 200
+    assert response.json()[0]["location"] == {"lng": -4.0, "lat": 5.3}
+
+
 def test_search_roads_by_name() -> None:
     client.post(
         "/api/v1/roads",

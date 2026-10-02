@@ -52,9 +52,31 @@ class SQLAlchemyPlaceRepository(PlaceRepository):
             updated_at=orm.updated_at,
         )
 
-    async def list_all(self) -> list[PlaceORM]:
-        result = await self.session.execute(select(PlaceORM).order_by(PlaceORM.id.desc()))
+    async def list_all(self, *, limit: int) -> list[PlaceORM]:
+        result = await self.session.execute(
+            select(PlaceORM).order_by(PlaceORM.id.desc()).limit(limit)
+        )
         return list(result.scalars().all())
+
+    async def list_public(self, *, limit: int) -> list[dict]:
+        result = await self.session.execute(
+            select(
+                PlaceORM.id.label("id"),
+                PlaceORM.name.label("name"),
+                PlaceORM.category.label("category"),
+                func.ST_X(PlaceORM.location).label("lng"),
+                func.ST_Y(PlaceORM.location).label("lat"),
+                PlaceORM.aliases.label("aliases"),
+                PlaceORM.vernacular_name.label("vernacular_name"),
+                PlaceORM.description.label("description"),
+                PlaceORM.verified.label("verified"),
+                PlaceORM.validation_status.label("validation_status"),
+                PlaceORM.extra_metadata.label("extra_metadata"),
+            )
+            .order_by(PlaceORM.id.desc())
+            .limit(limit)
+        )
+        return [dict(row) for row in result.mappings().all()]
 
     async def get_by_id(self, place_id: int) -> PlaceORM | None:
         result = await self.session.execute(select(PlaceORM).where(PlaceORM.id == place_id))
